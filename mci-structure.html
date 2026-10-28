@@ -1,0 +1,335 @@
+<title>MCI 호출 구조</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+  :root {
+    --bg: #fafaf9;
+    --fg: #1c1917;
+    --fg-dim: #78716c;
+    --surface: #ffffff;
+    --border: #e7e5e4;
+    --accent: #2563eb;
+    --accent-bg: #eff6ff;
+    --red: #dc2626;
+    --red-bg: #fef2f2;
+    --green: #16a34a;
+    --green-bg: #f0fdf4;
+    --orange: #ea580c;
+    --orange-bg: #fff7ed;
+    --font-body: 'Noto Sans KR', sans-serif;
+    --font-mono: 'JetBrains Mono', monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #0c0a09; --fg: #e7e5e4; --fg-dim: #a8a29e;
+      --surface: #1c1917; --border: #292524;
+      --accent: #60a5fa; --accent-bg: #172554;
+      --red: #f87171; --red-bg: #450a0a;
+      --green: #4ade80; --green-bg: #052e16;
+      --orange: #fb923c; --orange-bg: #431407;
+      color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #0c0a09; --fg: #e7e5e4; --fg-dim: #a8a29e;
+    --surface: #1c1917; --border: #292524;
+    --accent: #60a5fa; --accent-bg: #172554;
+    --red: #f87171; --red-bg: #450a0a;
+    --green: #4ade80; --green-bg: #052e16;
+    --orange: #fb923c; --orange-bg: #431407;
+    color-scheme: dark;
+  }
+  body {
+    background: var(--bg); color: var(--fg);
+    font-family: var(--font-body); font-size: 14px; line-height: 1.6;
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+    max-width: 960px; margin: 0 auto;
+    padding-block: 24px 48px;
+  }
+  h1 { font-size: 22px; font-weight: 700; margin: 0 0 6px; text-wrap: balance; }
+  h2 { font-size: 16px; font-weight: 700; margin: 32px 0 12px; padding-bottom: 8px; border-bottom: 2px solid var(--accent); text-wrap: balance; }
+  h3 { font-size: 14px; font-weight: 700; margin: 20px 0 8px; color: var(--accent); }
+  .subtitle { color: var(--fg-dim); font-size: 13px; margin: 0 0 28px; }
+  .flow { display: flex; flex-direction: column; gap: 2px; }
+  .layer { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 14px 16px; }
+  .layer-label { font-size: 11px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: var(--fg-dim); margin-bottom: 6px; }
+  .layer-file { font-family: var(--font-mono); font-size: 13px; font-weight: 500; color: var(--accent); }
+  .layer-desc { font-size: 13px; color: var(--fg); margin-top: 4px; }
+  .arrow { text-align: center; color: var(--fg-dim); font-size: 18px; line-height: 1; padding: 2px 0; }
+  .branch { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 8px; }
+  @media (max-width: 500px) { .branch { grid-template-columns: 1fr; } }
+  .branch-item { background: var(--accent-bg); border: 1px solid var(--border); border-radius: 6px; padding: 10px 12px; font-size: 12px; min-width: 0; }
+  .branch-item.worker { border-left: 3px solid var(--accent); }
+  .branch-item.biz { border-left: 3px solid var(--orange); }
+  .tag { display: inline-block; font-size: 10px; font-weight: 700; letter-spacing: 0.04em; padding: 2px 6px; border-radius: 3px; }
+  .tag-worker { background: var(--accent-bg); color: var(--accent); }
+  .tag-biz { background: var(--orange-bg); color: var(--orange); }
+  .tag-common { background: var(--green-bg); color: var(--green); }
+  .tag-delete { background: var(--red-bg); color: var(--red); }
+  code { font-family: var(--font-mono); font-size: 12px; background: var(--surface); border: 1px solid var(--border); padding: 1px 5px; border-radius: 3px; }
+  .change-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 8px; }
+  .change-list li { background: var(--surface); border: 1px solid var(--border); border-radius: 6px; padding: 10px 14px; font-size: 13px; display: flex; gap: 8px; align-items: flex-start; }
+  .change-list li .tag { flex-shrink: 0; margin-top: 2px; }
+  .note { background: var(--orange-bg); border-left: 3px solid var(--orange); padding: 10px 14px; border-radius: 0 6px 6px 0; font-size: 13px; margin: 12px 0; }
+  .async-box { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 14px 16px; margin-top: 12px; }
+  .async-step { display: flex; gap: 10px; align-items: flex-start; font-size: 13px; padding: 4px 0; }
+  .async-num { font-family: var(--font-mono); font-weight: 700; color: var(--accent); flex-shrink: 0; width: 20px; }
+  .field-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-top: 8px; }
+  @media (max-width: 500px) { .field-grid { grid-template-columns: 1fr; } }
+  .field-item { font-family: var(--font-mono); font-size: 11px; background: var(--surface); border: 1px solid var(--border); border-radius: 4px; padding: 6px 8px; min-width: 0; word-break: break-all; }
+  .section-divider { border: none; border-top: 1px solid var(--border); margin: 32px 0; }
+  .summary-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; }
+  .summary-card { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 12px 14px; }
+  .summary-card .label { font-size: 11px; color: var(--fg-dim); font-weight: 500; text-transform: uppercase; letter-spacing: 0.04em; }
+  .summary-card .value { font-size: 15px; font-weight: 700; margin-top: 2px; }
+  details { background: var(--surface); border: 1px solid var(--border); border-radius: 6px; margin-top: 8px; }
+  details summary { padding: 10px 14px; cursor: pointer; font-size: 13px; font-weight: 500; }
+  details[open] summary { border-bottom: 1px solid var(--border); }
+  details .inner { padding: 12px 14px; font-size: 13px; }
+</style>
+
+<h1>MCI 사업자 신용대출 — 호출 구조</h1>
+<p class="subtitle">RCIS9593IR 전문 연동 | 컨트롤러 → MCI 전송까지 전체 체인 + PL 수정 방향 (10/28)</p>
+
+<h2>IN/OUT 비동기(역거래) 패턴</h2>
+<div class="async-box">
+  <div class="async-step"><span class="async-num">1</span><span>우리 WAS → MCI 가심사요청(IN) 전송 <code>EFFC_NBNO_RCIS9593IR</code></span></div>
+  <div class="async-step"><span class="async-num">2</span><span>제공기관 → 즉시 접수확인 응답 (대출거래번호만, "잘 받았다" 수준)</span></div>
+  <div class="async-step"><span class="async-num">3</span><span>제공기관 → 역거래(OUT)로 실제 심사결과 전송 (약 1분 이내)</span></div>
+  <div class="async-step"><span class="async-num">4</span><span>우리 WAS → 수신확인 응답 전송</span></div>
+</div>
+<p style="font-size:12px;color:var(--fg-dim);margin-top:6px;">MCI 거래로그: 100=WAS→MCI 송신 / 200=접수확인 수신 / 300=제공기관→MCI / 400=MCI→WAS 전달</p>
+
+<hr class="section-divider">
+
+<h2>IN 방향 — 전체 호출 체인</h2>
+
+<div class="flow">
+  <!-- Controller -->
+  <div class="layer">
+    <div class="layer-label">1. Controller</div>
+    <div class="layer-file">fcccb1100tC.java</div>
+    <div class="layer-desc">
+      <code>@McuCallID</code> 어노테이션으로 전문ID 매핑. 엔드포인트에서 직장인/사업자 분리.
+    </div>
+    <div class="branch">
+      <div class="branch-item worker">
+        <span class="tag tag-worker">직장인</span><br>
+        <code>@PostMapping("/reqLoanLimit")</code><br>
+        <code>@McuCallID({"EFFC_NBNO_RCIS9590IR", ...})</code><br>
+        → <code>b1100s.reqLoanExec101(dataMap)</code>
+      </div>
+      <div class="branch-item biz">
+        <span class="tag tag-biz">사업자</span><br>
+        <code>@PostMapping("/reqLoanLimitBiz")</code><br>
+        <code>@McuCallID({"EFFC_NBNO_RCIS9593IR", ...})</code><br>
+        → <code>b1100s.reqLoanExecBiz101(dataMap)</code>
+      </div>
+    </div>
+  </div>
+
+  <div class="arrow">↓</div>
+
+  <!-- Service -->
+  <div class="layer">
+    <div class="layer-label">2. Service — 메인 오케스트레이터</div>
+    <div class="layer-file">fcccb1100tS.java</div>
+    <div class="layer-desc">
+      <code>execute(reqMap, isBiz)</code> — 400줄+ 공통 로직 (입력파라미터 조회, 자동차담보연동, 제휴사 순회 등)
+    </div>
+    <div class="note">
+      <strong>PL 수정 지시 (10/28):</strong> <code>isBiz</code> 파라미터 제거. 컨트롤러에서 이미 라우팅하므로 서비스에서 중복 분기 불필요. 대신 <code>lnRqJobC="5"</code> (requestMap에 이미 존재)로 판단.
+    </div>
+    <div class="layer-desc" style="margin-top:8px;">
+      <strong>핵심 분기 (line 182):</strong><br>
+      <code>if(scrpgSucYn.equals("Y"))</code> → 스크래핑 성공 시에만 MCI 전송 블록 진입<br>
+      └ <code>jonCls="5" &amp;&amp; 채널="002"</code> → <code>putHomeTaxInfo()</code> (사업자 홈택스)<br>
+      └ else → <code>putNHISInfo()</code> (직장인 건보)
+    </div>
+    <div class="layer-desc" style="margin-top:8px;">
+      <strong>당행 전문전송 분기 (for 루프 내부):</strong><br>
+      <code>tgrCode="3" &amp;&amp; fisCode="011"</code> → 당행일 때
+    </div>
+    <div class="branch">
+      <div class="branch-item worker">
+        <span class="tag tag-worker">직장인</span><br>
+        <code>fctcb1100tS.reqLoanLimitTc()</code>
+      </div>
+      <div class="branch-item biz">
+        <span class="tag tag-biz">사업자</span><br>
+        <code>fctcb1100tS.reqLoanLimitBizTc()</code>
+      </div>
+    </div>
+    <div class="note">
+      <strong>PL 수정 지시:</strong> <code>if(isBiz)</code> 대신 <code>lnRqJobC="5"</code>로 분기. isBiz 변수 자체를 없앰.
+    </div>
+  </div>
+
+  <div class="arrow">↓</div>
+
+  <!-- TC Service -->
+  <div class="layer">
+    <div class="layer-label">3. TC Service — 전문 전처리</div>
+    <div class="layer-file">fctcb1100tS.java</div>
+    <div class="branch">
+      <div class="branch-item worker">
+        <span class="tag tag-worker">직장인</span> <code>reqLoanLimitTc()</code><br>
+        <span style="font-size:12px;">공통부(파라미터 조회, getTcWrs, getBodyData) + <strong>isWorker 체크</strong>(직장인 가입자 확인) → 부결/진행 분기</span>
+      </div>
+      <div class="branch-item biz">
+        <span class="tag tag-biz">사업자</span> <code>reqLoanLimitBizTc()</code><br>
+        <span style="font-size:12px;">공통부 동일 + isWorker 체크 <strong>제거</strong> + 사업자 4필드 조회 (<code>getHometaxBzmnAllData</code>)</span>
+      </div>
+    </div>
+    <div class="note">
+      <strong>PL 수정 지시:</strong> isWorker 체크 부분에 사업자 케이스 <code>else if</code> 추가. <code>lnRqJobC="5"</code>일 때 사업자 로직 실행. 공통부는 유지.
+    </div>
+  </div>
+
+  <div class="arrow">↓</div>
+
+  <!-- MCI Call -->
+  <div class="layer">
+    <div class="layer-label">4. MCI EAI 호출</div>
+    <div class="layer-file">fctcb1101tS.java</div>
+    <div class="branch">
+      <div class="branch-item worker">
+        <span class="tag tag-worker">직장인</span> <code>callMciEai()</code><br>
+        <span style="font-size:12px;">→ <code>setCreditLoanMciBody()</code><br>→ <code>mciClient.callTrans("EFFC_NBNO_RCIS9590IR")</code></span>
+      </div>
+      <div class="branch-item biz">
+        <span class="tag tag-biz">사업자</span> <code>callBusinessMciEai()</code><br>
+        <span style="font-size:12px;">→ <code>setBusinessLoanMciBody()</code><br>→ <code>mciClient.callTrans("EFFC_NBNO_RCIS9593IR")</code></span>
+      </div>
+    </div>
+  </div>
+
+  <div class="arrow">↓</div>
+
+  <!-- Body Setup -->
+  <div class="layer">
+    <div class="layer-label">5. MCI Body 세팅</div>
+    <div class="layer-file">fctcb1101tS.java</div>
+    <div class="layer-desc"><code>setMciBody()</code> = 공통부 (직장인 전용 필드 없음 확인됨)</div>
+    <div class="branch">
+      <div class="branch-item worker">
+        <span class="tag tag-worker">직장인</span> <code>setCreditLoanMciBody()</code><br>
+        <span style="font-size:12px;">공통 + 직장인 전용 3필드<br><code>ontact_jbgrp_cfc</code>, <code>naf_empl_form_c</code>, <code>ontact_hlth_isr_ent_dsc</code></span>
+      </div>
+      <div class="branch-item biz">
+        <span class="tag tag-biz">사업자</span> <code>setBusinessLoanMciBody()</code><br>
+        <span style="font-size:12px;">공통 + 사업자 전용 4필드 + <code>rqr_tr_tpc="03"</code><br><code>io_dh_business_id</code>, <code>comm_bzmn_yn</code>, <code>nts_pnp_bzcc</code>, <code>io_ptax_dlq_yn</code></span>
+      </div>
+    </div>
+    <div class="note">
+      <strong>PL 수정 지시 — 상품코드:</strong> <code>ontact_ln_wrs_cfc</code>에 ps110 쿼리(ROWNUM=1) 결과 대신 <code>aflcnWrsC</code>(yml 매핑)에서 PD301 직접 사용. 사업자=무조건 PD301.
+    </div>
+  </div>
+
+  <div class="arrow">↓</div>
+
+  <!-- DB Insert -->
+  <div class="layer">
+    <div class="layer-label">6. 전문 저장 + 응답 처리</div>
+    <div class="layer-file">fctcb1101tS.java</div>
+    <div class="layer-desc">
+      <span class="tag tag-common">공통</span>
+      <code>insertMciData()</code> — 송수신내역 저장 (TB_EF_FC_CH_CNTGRM_SNR)<br>
+      <code>insertPmdDlvrorgData()</code> — 제공기관 데이터 저장
+    </div>
+  </div>
+</div>
+
+<hr class="section-divider">
+
+<h2>OUT 방향 — 역거래 수신</h2>
+<div class="flow">
+  <div class="layer">
+    <div class="layer-label">역거래 수신 (사업자/직장인 분기 없음)</div>
+    <div class="layer-file">fctcb1200tC → fctcb1200tS → fctcb1200tD</div>
+    <div class="layer-desc">
+      <span class="tag tag-common">공통 경로</span>
+      MCI 역거래 수신 → <code>noticeLoanLimit()</code> → <code>updateLoanLimitResult()</code> (INQ MERGE) + <code>insertMciData()</code> (전문 저장)
+    </div>
+    <div style="font-size:12px;margin-top:8px;color:var(--fg-dim);">
+      <strong>쿼리:</strong> ps120(제휴사조회) → ps121(갱신대상확인) → pu122(MERGE 갱신) → pi123(전문 INSERT)<br>
+      <strong>MERGE 키:</strong> CMPR_RQ_SQNO + AFLCN_C + AFLCN_WRS_AMN_C + LN_RQ_SQNO
+    </div>
+  </div>
+</div>
+
+<hr class="section-divider">
+
+<h2>사업자 4필드 데이터 소스</h2>
+<div class="layer">
+  <div class="layer-file">fctcb1100tD.getHometaxBzmnAllData(cmprRqSqno)</div>
+  <div class="layer-desc" style="margin-top:6px;">
+    <code>TB_EF_FC_CM_CMPR_RQAMN R</code> (비교신청관리기본, 항상 존재)<br>
+    <code>LEFT OUTER JOIN TB_EF_FC_CH_HTAX_PSN_BZMN H</code> (홈택스 스크래핑 데이터)
+  </div>
+  <div class="field-grid">
+    <div class="field-item"><strong>io_dh_business_id</strong><br>← NVL(H.BZMN_NO, R.BZMN_NO)</div>
+    <div class="field-item"><strong>comm_bzmn_yn</strong><br>← H.COMM_BZMN_YN</div>
+    <div class="field-item"><strong>nts_pnp_bzcc</strong><br>← H.NTS_BZCNM</div>
+    <div class="field-item"><strong>io_ptax_dlq_yn</strong><br>← H.DLQ_YN</div>
+  </div>
+  <p style="font-size:12px;color:var(--fg-dim);margin-top:6px;">
+    스크래핑 미연결 시: BZMN_NO만 NVL 대체, 나머지 3개 NULL → safeTrim이 빈값 처리
+  </p>
+</div>
+
+<hr class="section-divider">
+
+<h2>10/28 PL 수정 지시 — 요약</h2>
+<ul class="change-list">
+  <li>
+    <span class="tag tag-delete">제거</span>
+    <span><code>fcccb1100tS.execute()</code>의 <code>boolean isBiz</code> 파라미터 전부 제거. <code>reqLoanExec101</code>/<code>reqLoanExecBiz101</code>에서 true/false 넘기는 것도 제거.</span>
+  </li>
+  <li>
+    <span class="tag tag-delete">제거</span>
+    <span><code>isBiz = "5".equals(jonCls)</code> 덮어쓰기 (line 122 뒤) 제거</span>
+  </li>
+  <li>
+    <span class="tag tag-biz">변경</span>
+    <span>당행 분기에서 <code>if(isBiz)</code> → <code>if("5".equals(lnRqJobC))</code>로 교체. requestMap에서 직접 판단.</span>
+  </li>
+  <li>
+    <span class="tag tag-biz">변경</span>
+    <span><code>fctcb1100tS</code>: isWorker 체크 부분에 사업자 <code>else if</code> 추가. <code>lnRqJobC="5"</code>일 때 사업자 로직.</span>
+  </li>
+  <li>
+    <span class="tag tag-biz">변경</span>
+    <span>상품코드: <code>aflcnWrsC</code>(yml 매핑)에서 PD301 직접 사용. ps110 쿼리 결과 의존 제거.</span>
+  </li>
+  <li>
+    <span class="tag tag-delete">제거</span>
+    <span>불필요한 분기 코드 원복 — 기존 구조로 되돌리고 최소 변경만</span>
+  </li>
+</ul>
+
+<details>
+  <summary>임시코드 (커밋 금지 — 삭제 예정)</summary>
+  <div class="inner">
+    <ul style="margin:0;padding-left:18px;">
+      <li><code>scrpgSucYn = "Y"</code> 강제 세팅 (line 182 위)</li>
+      <li>채널코드 <code>"05"</code> OR 조건 (line 183)</li>
+      <li>디버그 <code>System.out.println</code> / <code>log.info</code> 전체</li>
+      <li><code>resultBodyMap</code> 로그</li>
+      <li><code>resultMap</code> OUT 로그</li>
+    </ul>
+  </div>
+</details>
+
+<details style="margin-top:8px;">
+  <summary>PL 대기/미해결 사항</summary>
+  <div class="inner">
+    <ul style="margin:0;padding-left:18px;">
+      <li>스크래핑 진입점 연결 (황인준 과장 처리 중) → H 테이블에 실데이터 적재 필요</li>
+      <li>사업자 전용 4필드: 스크래핑 연결 전까지 가값</li>
+      <li>대환(<code>rqr_tr_tpc="04"</code>): 범위 제외 (PL 지시)</li>
+      <li><code>scrpgSucYn</code>: 스크래핑 성공 후에만 전송 (PL 확인됨)</li>
+    </ul>
+  </div>
+</details>

@@ -44,13 +44,21 @@
 - EnvUtil.isCbt()/getCbtYn()은 CBT와 무관(운영환경 판단용) → if문 자체 삭제됨
 - cbtOnly 플래그로 CBT 전용 제휴사는 ps315 스킵+ps325만 실행
 
-### 2. MCI 사업자 신용대출 가심사요청 — 진행 중
+### 2. MCI 사업자 신용대출 가심사요청 — 코드 완료, 실데이터 대기
 - 기존 직장인(RCIS9590IR) 구현에 사업자(RCIS9593IR) 추가
-- **호출체인**: fcccb1100tC.reqLoanLimit → fcccb1100tS.execute(isBiz 분기) → fctcb1100tS.reqLoanLimitTc/reqLoanLimitBizTc → fctcb1101tS.callMciEai/callBusinessMciEai → setCreditLoanMciBody/setBusinessLoanMciBody
-- 분기 기준: lnRqJobC="5"(개인사업자), TI Controller에서 @McuCallID 배열로 처리
+- **호출체인 (10/28 PL 피드백 반영 후)**: fcccb1100tC.reqLoanLimit → fcccb1100tS.execute() → fctcb1100tS.reqLoanLimitTc(jonCls="5" 분기) → fctcb1101tS.callBusinessMciEai → setBusinessLoanMciBody/setMciBody
+- 분기 기준: jonCls="5"(개인사업자), TI Controller에서 @McuCallID 배열로 처리
 - IN/OUT 비동기 구조: 가심사요청(IN) → 접수확인 → 역거래로 심사결과 수신
 - **역거래(OUT)**: fctcb1200tC/tS/tD — 사업자/직장인 분기 없이 동일 경로 처리
 - rqr_tr_tpc="03"(사업자 신규), **대환("04")은 범위 제외** (PL 지시)
+
+#### 10/28 완료 사항
+- isBiz 파라미터 제거 (fcccb1100tC, fcccb1100tS)
+- reqLoanLimitBizTc 삭제 → reqLoanLimitTc에 jonCls="5" 사업자 분기 통합
+- setMciBody 상품코드 분기: getEffcCore("aflcnC", aflcnC) → PD301
+- common_ti_config.yml aflcnC PD301 매핑 추가
+- 로컬 디버그: PD301 정상 확인
+- dev 배포: MCI 가심사요청 송신 정상, 역거래 수신 정상 (제휴사 결과값 미유입으로 유효성 오류)
 
 #### MCI 관련 임시코드 (삭제 예정, 커밋 금지)
 1. scrpgSucYn 강제 "Y" 세팅 — **삭제 대상** (PL 확인됨: 스크래핑 성공 후에만 전송)
@@ -60,12 +68,7 @@
 
 #### PL 대기/미해결 사항
 - 스크래핑 진입점 연결: 황인준 과장이 처리 중 → 이게 돼야 TB_EF_FC_CH_HTAX_PSN_BZMN에 실데이터 적재
-- PD코드 ps110 쿼리: ROWNUM=1이라 PD001 먼저 잡히는 문제 (PD301 나가야 함) — 현재 yml fallback으로 우회 중
 - 사업자 전용 4필드(io_dh_business_id/comm_bzmn_yn/nts_pnp_bzcc/io_ptax_dlq_yn): 스크래핑 연결 전까지 가값
-
-#### PD301 yml 외부화 완료
-- common_ti_config.yml에 aflcnWrsC(정방향 fpd0001→PD301) + ontactTupCompDsc(역방향 PD301→fpd0001) 매핑 추가
-- DB 빈값 시 TIUtil.getEffcCore fallback
 
 ---
 

@@ -5,21 +5,28 @@
 ## 2026-10-28
 
 ### [MCI] isBiz 파라미터 제거 및 구조 수정 (PL 피드백)
-- **상태**: 미해결 (오전 중 완료 필요)
+- **상태**: 해결
 - **문제**: fcccb1100tS.execute()에 isBiz 파라미터를 추가했으나, 컨트롤러(@McuCallID)에서 이미 라우팅하므로 서비스에서 중복 체크 불필요
 - **원인**: 사업자/직장인 분기를 서비스 레이어에서도 했으나, 이미 컨트롤러에서 분리됨
-- **해결 방향**:
+- **해결**:
   1. fcccb1100tS.execute()의 isBiz 파라미터 전부 제거
-  2. fctcb1101tS에서 isWorker 체크 → lnRqJobC="5"일 때 사업자로 else if 추가
-  3. 공통부는 유지, body 세팅에서만 분기 (callMciEai vs callBusinessMciEai)
-- **배운 점**: 컨트롤러에서 이미 라우팅하는 구조면 서비스에 중복 분기 플래그 넣지 말 것. 기존 requestMap의 값(lnRqJobC)을 활용
+  2. fctcb1100tS.reqLoanLimitTc에서 jonCls="5" 사업자 분기 추가 (isWorker 앞에)
+  3. reqLoanLimitBizTc 삭제, reqLoanLimitTc 하나로 통합
+  4. 사업자 분기 안에서 4필드 세팅 + callBusinessMciEai 호출
+- **배운 점**: 컨트롤러에서 이미 라우팅하는 구조면 서비스에 중복 분기 플래그 넣지 말 것. 기존 requestMap의 값(jonCls)을 활용
 
 ### [MCI] 상품코드 PD301 직접 매핑 (ps110 ROWNUM 우회)
-- **상태**: 미해결 (오전 중 완료 필요)
+- **상태**: 해결
 - **문제**: ps110 쿼리 ROWNUM=1으로 PD001이 먼저 잡힘 (PD301이 나가야 함)
 - **원인**: 쿼리 정렬 순서상 PD001이 먼저 리턴
-- **해결 방향**: 사업자 경로에서는 ps110 결과 의존 대신 aflcnWrsC(yml 매핑)에서 PD301 직접 가져오기. 사업자=무조건 PD301이라 예외 없음
-- **배운 점**: 값이 고정인 경우 쿼리 결과보다 설정값이 안전. "바뀔 여지가 없는" 값은 고정으로
+- **해결**: setMciBody에서 jonCls="5" 분기 추가, TIUtil.getEffcCore("aflcnC", aflcnC)로 yml에서 PD301 직접 매핑. common_ti_config.yml에 aflcnC: "fco0001": PD301 추가
+- **배운 점**: 값이 고정인 경우 쿼리 결과보다 설정값이 안전. DB 의존 대신 yml 외부화
+
+### [MCI] 사업자 MCI 송수신 테스트 결과
+- **상태**: 부분해결
+- **문제**: 사업자 가심사요청 MCI 전문 송신 및 역거래 수신 확인
+- **결과**: MCI 송신 정상, 역거래 수신 정상 (결과값 수신 확인). 다만 제휴사 결과값 미유입으로 유효성 필수값 오류코드 수신
+- **대기**: 황인준 과장 스크래핑 진입점 연결 후 실데이터 재테스트 필요
 
 ---
 

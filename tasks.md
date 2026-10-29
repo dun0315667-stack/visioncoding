@@ -55,15 +55,37 @@
 
 ---
 
-## 2026-10-29 할 일
+## 2026-10-29
 
-- [ ] MCI 4필드 로컬 디버그 — reqLoanLimitTc 브레이크포인트, 4필드 값 확인
-- [ ] PL에게 scrpgSucYn 체크 위치 질문
+### [MCI] 사업자 4필드 하드코딩 테스트 결과
+- **상태**: 부분해결
+- **원인 확정**: getHometaxBzmnData(cmprRqSqno) 조회 결과 없음 — TB_EF_FC_CH_HTAX_PSN_BZMN에 10/23 이후 데이터 미적재 (스크래핑 미연결)
+- **조치**: fctcb1100tS.java에서 hometaxMap에 4필드 직접 하드코딩 (DB 의존 우회)
+- **결과**:
+  - 송신: 4필드 모두 정상 포함됨 확인
+  - 수신: 여전히 validation 오류 — 제휴사 결과값 미유입 (박명수 과장 확인, 이전과 동일)
+- **대기**: 황인준 과장 스크래핑 진입점 연결 → 실데이터로 재테스트
+
+### [BRIDGE] PT/MT 브릿지URL lnRqSqno 파라미터 추가
+- **상태**: 부분확인
+- **작업 내용**:
+  - CM SQL(fcmab01_sql.xml): selectLoanExecProductDetail SELECT에 A.LN_RQ_SQNO 추가
+  - CM 서비스(fcmab0106sS.java): dataMap.getOut().put("LN_RQ_SQNO", ...) 추가
+  - PT JSP(fcmap0106r.jsp): lnRqSqno 변수 선언 + gotoInsurance params 추가
+  - 상품리스트(fclmp0100r.jsp): gotoDtlProd에 lnRqSqno 파라미터 전달
+- **테스트 결과**:
+  - PT 데스크탑: 검정화면 멈춤 (opa.execute PC 미지원, 예상대로)
+  - PT 실기기(올원뱅크 앱): 페이지 정상 이동 ✓
+  - MT 데스크탑: brpgUrl 콘솔 정상 출력 ✓
+  - MT 실기기(스마트뱅크 앱): 로그인 불가로 미확인
+
+### 남은 할 일
 - [ ] CBT 테스트 시나리오 실행
-- [ ] bridge_common predev 배포 확인 후 실기기 테스트
+- [ ] MT 실기기 테스트 (스마트뱅크 로그인 후)
 - [ ] 155 DB 캡처 마무리
 - [ ] 156 대출실행내역 수정 여부 양식 작성
 - [ ] 157~159 보류 처리 팀장 보고
+- [ ] 스크래핑 연결 후 MCI 4필드 실데이터 재테스트
 
 ---
 

@@ -37,12 +37,19 @@
 
 ## 현재 담당 과제들
 
-### 1. CBT (신규 제휴사 사전공개) — 완료
+### 1. CBT (신규 제휴사 사전공개) — 테스트 완료, 버그 수정 대기
 - ps310(제휴사) + ps320(CBT 제휴사) → fisCodeList addAll
 - ps315(상품) + ps325(CBT 상품) → lnList addAll
 - CBT 대상이면 거래제한 무시, 정식출시 상품은 NOT EXISTS로 제외
 - EnvUtil.isCbt()/getCbtYn()은 CBT와 무관(운영환경 판단용) → if문 자체 삭제됨
 - cbtOnly 플래그로 CBT 전용 제휴사는 ps315 스킵+ps325만 실행
+- **CBT 핵심 원리**: ADDITIVE 구조. ps315=모든 정식출시 상품, ps325=CBT전용 추가. NOT EXISTS는 중복제거용
+- **ps325 OR 괄호 수정 완료**: 정식출시 상품제외 NOT EXISTS 내 OR 우선순위. 기능 영향 없음(Java dedup 처리)
+- **미해결 버그 (PL 다음주 확인)**:
+  1. filterCarLoanOwners HashMap 수정이 dev 미반영 → sendInList2 중복
+  2. fisCodeList 제휴사 중복제거 없음 (ps310+ps320 addAll 시)
+  3. inList2가 제휴사 for문에서 초기화 안 됨 → 이전 제휴사 상품 누적
+  4. 송수신 테이블: NA1010_IS로 봐야 하는데 NA1010_IR로 보내고 있음
 
 ### 2. MCI 사업자 신용대출 가심사요청 — 코드 완료, 실데이터 대기
 - 기존 직장인(RCIS9590IR) 구현에 사업자(RCIS9593IR) 추가
@@ -186,15 +193,17 @@
 
 ---
 
-## 내일(10/29) 할 일
+## 다음주(11/2~) 할 일
 
-- [ ] MCI 4필드 로컬 디버그 — reqLoanLimitTc에서 4필드 값 들어가는지 브레이크포인트 확인
-- [ ] PL에게 scrpgSucYn 체크 위치 질문 (서비스단 vs 앞단)
-- [ ] CBT 테스트 시나리오 실행 (아래 테스트케이스 참고)
-- [ ] bridge_common predev 배포 확인 → 실기기 모바일 테스트
+- [ ] PL 확인: filterCarLoanOwners dev 배포 상태
+- [ ] PL 확인: inList2 누적 버그 (제휴사 for문 초기화)
+- [ ] PL 확인: fisCodeList 제휴사 중복제거
+- [ ] PL 확인: NA1010_IS vs NA1010_IR 송수신 방식
+- [ ] MT 실기기 테스트 (스마트뱅크 로그인 후)
 - [ ] 155 DB 캡처 마무리
 - [ ] 156 대출실행내역 수정 여부 양식 작성
 - [ ] 157~159 보류 처리 팀장 보고
+- [ ] 스크래핑 연결 후 MCI 4필드 실데이터 재테스트
 
 ---
 

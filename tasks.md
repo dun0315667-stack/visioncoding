@@ -88,6 +88,60 @@
 
 ---
 
+## 2026-11-02
+
+### [CBT] 제휴사 for문 변수 누적 버그 수정
+- **상태**: 수정 완료
+- **문제**: for문 밖에 선언된 변수들이 제휴사 반복마다 초기화 안 되어 이전 제휴사 데이터 누적
+- **원인**: exist(Set), inList2, GdLIST, CarInfoLIST, carRgList, carInfList 등이 for문 밖 선언
+- **해결**:
+  1. `Set<String> exist` → for문 안으로 이동
+  2. `inList2` → cbtOnly일 때 `else { inList2 = new ArrayList<>(); }` 추가
+  3. `GdLIST`, `CarInfoLIST`, `carRgList`, `carInfList` → for문 밖 null, 안에서 `new ArrayList<>()` 재생성
+- **검증**: cbtOnly 제휴사 → 일반 제휴사 순서로 테스트, 데이터 분리 확인
+- **배운 점**: `.clear()`보다 `new ArrayList<>()`가 안전 — map101에 put한 리스트가 참조 공유로 같이 비워지는 것 방지
+
+### [CBT] fisCodeList 제휴사 중복 이슈 클로즈
+- **상태**: 이슈 아님 (기존 코드에서 처리됨)
+- **내용**: cbtKey(AFLCN_C|AFLCN_WRS_C) 기반 Set<String> seen으로 중복체크 이미 구현
+- **조치**: 이슈 클로즈
+
+### [MCI] ntsBzcc SQL 오타 수정
+- **상태**: 수정 완료
+- **문제**: MCI 송신전문에 업종코드(722000) 대신 업종명(응용 소프트웨어 개발 및 공급업)이 전송됨
+- **원인**: SQL alias가 `bts_bzcc`로 오타 → 업종명 컬럼을 참조
+- **해결**: `bts_bzcc` → `nts_bzcc`로 수정
+
+### [BRIDGE] brpgUrl APP/WEB 분기 추가 (PD003/PD301)
+- **상태**: 수정 완료
+- **문제**: PD301(사업자) 추가 시 "40000950"(앱용 wrsc코드)이 MT(웹)에도 내려가서 빈 페이지
+- **해결** (fctcb1300tS.java):
+  1. PD003 조건에 PD301 추가: `"PD003".equals(aflcnWrsC) || "PD301".equals(aflcnWrsC)`
+  2. APP/WEB 분기: `!"05".equals(chnlCd)` → "40000950"(앱), else → `getNhbUrl("03","11")`(웹)
+  3. `lnRqSqno` + `rq_gbn=02` 서비스단 블록 삭제 (440/449 전용이므로 서비스에서 일괄처리 불필요)
+- **참고**: chnlCd="05"가 MT(모바일웹). yml 키는 J011.URL.03.11
+- **배운 점**: "40000950"은 URL이 아니라 PT gotoNhwrc용 wrsc 서비스코드. MT는 yml URL 필요
+
+### [MCI] NA1010_IS vs NA1010_IR 이슈 클로즈
+- **상태**: 이슈 아님
+- **내용**: send response이므로 IR이 맞음. 클로즈
+
+### 이전 이슈 상태 업데이트
+- [x] filterCarLoanOwners: dev 배포 완료 확인
+- [x] fisCodeList 제휴사 중복: 기존 코드에서 Set seen으로 처리됨 (이슈 아님)
+- [x] inList2 누적: if문으로 감싼 게 원인 → exist/inList2/리스트 초기화 수정 완료
+- [x] NA1010_IS/IR: IR이 맞음 (클로즈)
+
+### 남은 할 일
+- [ ] MT 실기기 테스트 (스마트뱅크 로그인 후)
+- [ ] 155 DB 캡처 마무리
+- [ ] 156 대출실행내역 수정 여부 양식 작성
+- [ ] 157~159 보류 처리 팀장 보고
+- [ ] 스크래핑 연결 후 MCI 4필드 실데이터 재테스트
+- [ ] 하드코딩 코드 전부 원복 (커밋 전)
+
+---
+
 ## 2026-10-30
 
 ### [CBT] 테스트 시나리오 실행 결과

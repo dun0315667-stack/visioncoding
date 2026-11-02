@@ -37,7 +37,7 @@
 
 ## 현재 담당 과제들
 
-### 1. CBT (신규 제휴사 사전공개) — 테스트 완료, 버그 수정 대기
+### 1. CBT (신규 제휴사 사전공개) — 버그 수정 완료, 테스트 진행중
 - ps310(제휴사) + ps320(CBT 제휴사) → fisCodeList addAll
 - ps315(상품) + ps325(CBT 상품) → lnList addAll
 - CBT 대상이면 거래제한 무시, 정식출시 상품은 NOT EXISTS로 제외
@@ -45,11 +45,13 @@
 - cbtOnly 플래그로 CBT 전용 제휴사는 ps315 스킵+ps325만 실행
 - **CBT 핵심 원리**: ADDITIVE 구조. ps315=모든 정식출시 상품, ps325=CBT전용 추가. NOT EXISTS는 중복제거용
 - **ps325 OR 괄호 수정 완료**: 정식출시 상품제외 NOT EXISTS 내 OR 우선순위. 기능 영향 없음(Java dedup 처리)
-- **미해결 버그 (PL 다음주 확인)**:
-  1. filterCarLoanOwners HashMap 수정이 dev 미반영 → sendInList2 중복
-  2. fisCodeList 제휴사 중복제거 없음 (ps310+ps320 addAll 시)
-  3. inList2가 제휴사 for문에서 초기화 안 됨 → 이전 제휴사 상품 누적
-  4. 송수신 테이블: NA1010_IS로 봐야 하는데 NA1010_IR로 보내고 있음
+- **11/2 수정 완료**:
+  1. filterCarLoanOwners: dev 배포 완료 확인
+  2. fisCodeList 제휴사 중복: cbtKey(AFLCN_C|AFLCN_WRS_C) Set seen으로 이미 처리됨 (이슈 아님)
+  3. inList2 누적: cbtOnly if문 안에 inList2 할당이 들어가 초기화 안 됨 → else { inList2 = new ArrayList<>(); } 추가
+  4. exist Set: for문 안으로 이동 (제휴사 간 WrsAmnC 잔류 방지)
+  5. GdLIST/CarInfoLIST/carRgList/carInfList: for문 안 new ArrayList<>() 재생성 (전문 반복 출력 수정)
+  6. NA1010_IS/IR: send response이므로 IR이 맞음 (클로즈)
 
 ### 2. MCI 사업자 신용대출 가심사요청 — 코드 완료, 실데이터 대기
 - 기존 직장인(RCIS9590IR) 구현에 사업자(RCIS9593IR) 추가
@@ -184,8 +186,11 @@
 
 ### 대출신청접수 응답 구조 (fctcb1300tS)
 - `fcmm00101: result: '00000', brpgUrl: 'https://cert-test.goryeob.co.kr/...'`
-- 제휴사코드별 brpgUrl 분기: PD003→"40000950", 440→NH생명, 449→NH화재, 011→getNhbUrl
+- 제휴사코드별 brpgUrl 분기: PD003/PD301→APP "40000950" / WEB getNhbUrl("03","11"), 440→NH생명, 449→NH화재, 011→getNhbUrl
 - 당행은 별도 MCI 전문 없이 대출실행내역 테이블 저장 후 brpgUrl만 리턴
+- **11/2 수정**: PD301 추가, APP/WEB 분기(chnlCd="05"=MT), lnRqSqno+rq_gbn=02 서비스단 블록 삭제
+- **"40000950"은 URL이 아니라 PT gotoNhwrc용 wrsc 서비스코드**. MT는 yml URL 필요
+- **chnlCd**: cusCtcChanC에서 가져옴. "05"=MT(모바일웹). yml 키는 J011.URL.03.{itemCd}
 
 ### DB 분석 완료
 - 송수신내역(TB_EF_FC_CH_CNTGRM_SNR) vs 대출실행관리내역(TB_EF_FC_CH_LN_EXEAMN)
@@ -193,17 +198,18 @@
 
 ---
 
-## 다음주(11/2~) 할 일
+## 남은 할 일
 
-- [ ] PL 확인: filterCarLoanOwners dev 배포 상태
-- [ ] PL 확인: inList2 누적 버그 (제휴사 for문 초기화)
-- [ ] PL 확인: fisCodeList 제휴사 중복제거
-- [ ] PL 확인: NA1010_IS vs NA1010_IR 송수신 방식
+- [x] filterCarLoanOwners dev 배포 확인 (완료)
+- [x] inList2 누적 버그 수정 (11/2 완료)
+- [x] fisCodeList 제휴사 중복 (기존 코드에서 처리됨, 이슈 아님)
+- [x] NA1010_IS/IR (IR이 맞음, 클로즈)
 - [ ] MT 실기기 테스트 (스마트뱅크 로그인 후)
 - [ ] 155 DB 캡처 마무리
 - [ ] 156 대출실행내역 수정 여부 양식 작성
 - [ ] 157~159 보류 처리 팀장 보고
 - [ ] 스크래핑 연결 후 MCI 4필드 실데이터 재테스트
+- [ ] 하드코딩 코드 전부 원복 (커밋 전)
 
 ---
 

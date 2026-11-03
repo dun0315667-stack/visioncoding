@@ -12,7 +12,8 @@
 
 - **팀**: 채널팀 (비교대출 모바일웹)
 - **기술 스택**: Spring Boot + 농협 자체 프레임워크("프로프레임웍"), MyBatis, JSP 기반 모바일웹(MT), Eclipse STS
-- **서버 환경**: dev 28700=MT(모바일웹), dev 28800=PT(기존 앱, PC브라우저에서 동작하는 유일한 테스트환경), predev=스마트데브 서버
+- **서버 환경**: dev 28700=MT(모바일웹), dev 28800=PT(기존 앱, PC브라우저에서 동작하는 유일한 테스트환경), predev=스마트데브 서버, **smartdev 8700=통합테스트 환경**
+- **현재 단계**: 통합테스트(통테) 기간 — smartdev 8700으로 테스트 진행
 - **네트워크**: 폐쇄망(업무 PC 인터넷 불가, 개인폰으로 검색/GPT 사용)
 - **Git**: SourceTree, TI/PT/MT/CM 4개 별개 저장소. origin/feature/channel 브랜치 기준 작업+Push. 배포는 수석님이 SmartDev로 채널 브랜치 기준 진행
 - **DB**: Oracle, AutoCommit OFF (반드시 수동 COMMIT)

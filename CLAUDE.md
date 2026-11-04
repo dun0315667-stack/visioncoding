@@ -54,7 +54,7 @@
   5. GdLIST/CarInfoLIST/carRgList/carInfList: for문 안 new ArrayList<>() 재생성 (전문 반복 출력 수정)
   6. NA1010_IS/IR: send response이므로 IR이 맞음 (클로즈)
 - **11/3 통합테스트 결과**: 5개 시나리오 전체 PASS
-- **CBT 2건 조회 건**: ps325 SQL은 상품 단위 필터 정상(`M.AFLCN_WRS_AMN_C = TA.AFLCN_WRS_AMN_C`). DB에 tpd1520+tpd1321 두 상품 모두 CBT 활성 등록 → 코드 이상 없음, 데이터 문제
+- **CBT 2건 조회 건**: ps325 SQL은 상품 단위 필터 정상(`M.AFLCN_WRS_AMN_C = TA.AFLCN_WRS_AMN_C`). DB에 fpd1320+fpd1321 두 상품 모두 CBT 활성 등록 → 코드 이상 없음, 데이터 문제
 
 ### 2. MCI 사업자 신용대출 가심사요청 — 코드 완료, 실데이터 대기
 - 기존 직장인(RCIS9590IR) 구현에 사업자(RCIS9593IR) 추가

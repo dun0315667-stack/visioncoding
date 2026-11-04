@@ -166,7 +166,7 @@
 - **증상**: 제휴사 거래제한 + CBT 등록 상품 1건인데 2건 조회됨
 - **원인 조사**:
   1. ps325 SQL 분석 → 상품 단위 CBT 필터 정상 (line 283: `M.AFLCN_WRS_AMN_C = TA.AFLCN_WRS_AMN_C`)
-  2. DB 조회 (`TB_EF_FC_CM_CBT_AMN_BSC WHERE AFLCN_C='fco1001'`) → **tpd1520, tpd1321 두 상품 모두 CBT 활성 등록 상태**
+  2. DB 조회 (`TB_EF_FC_CM_CBT_AMN_BSC WHERE AFLCN_C='fco1001'`) → **fpd1320, fpd1321 두 상품 모두 CBT 활성 등록 상태**
 - **결론**: SQL/Java 코드 정상. 관리자페이지에서 두 상품 모두 CBT 등록되어 있어서 2건 조회는 정상 동작
 
 ### [MCI] 80002230 오류

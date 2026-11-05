@@ -243,20 +243,59 @@
 - **변경 시트**: 프로그램기능 + 사유까지 작성 필요
 - **참고**: AM 배포리스트 양식 기준
 
-### [학습] 우선 학습 과제 — 데이터 흐름 추적 (jonCls/lnRqJobC)
+### [학습] 우선 학습 과제 1 — 데이터 흐름 추적 (jonCls/lnRqJobC)
 - **우선순위**: 높음
-- **주제**: Spring + 프로프레임웍에서 requestMap 데이터가 CM → CH → TI 계층을 거치며 어떻게 전달되는지 추적하는 방법
+- **주제**: Spring + 프로프레임웍에서 requestMap 데이터가 CM → TI 계층을 거치며 어떻게 전달되는지 추적하는 방법
+- **핵심 발견**: lnRqJobC는 CM에만, jonCls는 TI에만 존재. 중간 변환 지점을 못 찾음
+- **TI에서 jonCls 가져오는 코드**: `String jonCls = TIUtil.safeTrim(mapIn, "jonCls")`
+- **CM에서 lnRqJobC 가져오는 코드**: `String lnRqJobC = dataMap.getin.getValue("ln_rq_job_c", "")`
 - **구체적으로 모르는 것**:
   1. lnRqJobC가 최초로 세팅되는 위치 (세션로그인? 고객정보 조회? CM 컨트롤러?)
-  2. lnRqJobC → jonCls로 변환되는 지점 (같은 값인지, 별도 조회인지)
-  3. requestMap/dataMap이 계층 간 전달될 때 어떤 키로 들어가고 어떤 키로 꺼내지는지
+  2. lnRqJobC → jonCls로 변환되는 지점 (CM→TI 사이 어딘가)
+  3. mapIn에 jonCls 키로 언제 put되는지
   4. 더미로그인 vs 실 로그인에서 고객정보 세팅 차이
 - **학습 방법**:
   1. STS에서 lnRqJobC `Ctrl+H` 전체 검색 → 세팅하는 곳 전부 목록화
   2. jonCls도 동일하게 전체 검색 → 세팅 위치 파악
-  3. 브레이크포인트로 CM 컨트롤러부터 TI 서비스까지 한 단계씩 따라가기
-  4. dataMap.getIn/getOut, requestMap.put/get 패턴 이해
+  3. `mapIn.keySet()` 콘솔 출력으로 TI에 어떤 키가 넘어오는지 확인
+  4. 브레이크포인트로 CM부터 TI까지 한 단계씩 따라가기
 - **목표**: "이 값이 어디서 세팅되고 어디서 꺼내지는지" 전체 경로를 스스로 추적할 수 있는 능력
+
+### [학습] 우선 학습 과제 2 — 프로젝트 환경 설정 파일 이해
+- **우선순위**: 중간
+- **배경**: 배포리스트 작성하면서 파일 기능을 모르는 것들이 많았음
+- **학습 대상**:
+  1. **빌드 시스템 (Gradle)**:
+     - build.gradle — 프로젝트 빌드 설정 (의존성, 플러그인, 태스크)
+     - dependencies-app/common/system.gradle — 의존성 분리 관리
+     - settings.gradle — 멀티모듈 프로젝트 설정
+  2. **CI/CD (GitLab)**:
+     - gitlab-ci*.yml — 빌드/테스트/배포 파이프라인 정의
+     - variables-*.yml — 환경별(dev/predev/run) 변수 설정
+     - 환경별 분리: dev=개발, predev=스마트데브, run=운영, dr=재해복구
+  3. **Spring Boot 설정**:
+     - application.yml — 기본 설정
+     - application-local.yml — 로컬환경 설정 (커밋 금지)
+     - application-cbt.yml — CBT 환경 설정
+     - MtApplication.java / PtConfiguration.java — 스프링 부트 진입점/설정 클래스
+     - WebSecurityConfig.java — 웹 보안 설정 (CORS, CSRF, 인증 필터)
+  4. **보안/암호화**:
+     - ARIA (ARIAEngine/ARIAUtil) — 농협 표준 암호화 알고리즘
+     - CipherUtil/CryptoUtil — 암복호화 유틸
+     - eziok* — 본인인증 라이브러리 (간편인증)
+     - PETRA — 농협 표준 DB 암호화 (dev서버 자동동작)
+  5. **연계 시스템**:
+     - ODP (Online Data Platform) — 농협 내부 데이터 수집 미들웨어 (Od~ 접두어)
+     - 공공마이데이터 — 건강보험/홈택스/나이스 등 외부기관 연계 (Pm~ 접두어)
+     - MCI — 제휴사 연계 전문 통신
+  6. **배포 관련**:
+     - manifest_dev/dr/run.yml — Cloud Foundry 배포 매니페스트
+     - dev.sh/dr.sh/run.sh — 환경별 실행 스크립트
+     - nhcommonab-*.exe — 정적 리소스 빌드 도구
+  7. **패키지 구조 (채널팀)**:
+     - ag=약관, co=공통, cr=인증, ji=직장, lm=배너, ma=메인/상품, ml=관리자(BT), ti=TI연계, ws=웹서비스, bn=배너
+     - 접미어: sC=컨트롤러, sS=서비스, D=Dao, tC=TI컨트롤러, tS=TI서비스
+     - PT=고객화면, BT=관리자화면, 공통=co패키지
 
 ---
 

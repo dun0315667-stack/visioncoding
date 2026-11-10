@@ -431,6 +431,87 @@
 
 *(기록 없음)*
 
+---
+
+## 2026-11-10
+
+### [접근성] 접근성심사(웹 접근성 진단) 대응 — MT 모바일웹
+- **상태**: 진행 중
+- **대상**: 비교대출 모바일웹(MT) smartdev 8700 기준
+- **심사 범위**: 모바일웹 / iOS / Android 총 3건. iOS/Android는 PT 쪽 담당
+- **수정 원칙**:
+  1. 진단결과서에 지적된 항목만 수정, 범위 밖 수정 금지
+  2. 공통 함수(nhui.toggleSlide, nhui.toggleKeyword 등) 건드리지 않기
+  3. CSS 수정은 퍼블리셔 담당으로 패스
+
+#### 수정 완료 파일 및 내용
+
+**fccrm0400r.jsp (본인인증 화면)**
+- title 속성 정리, aria-label 추가
+
+**fcagm0102p.jsp (약관동의 팝업)**
+- 92/98/101번 줄 `.attr("title", "상세 동의 팝업 열기 선택안됨/선택됨")` → `"약관 상세보기 선택안됨/선택됨"`으로 변경
+- initPage() 함수 내 셀렉터 확인: `span[id^='describedby1']` (id 기반, title 아님 → title 변경 안전)
+
+**fcagm0100r.jsp (약관동의 화면)**
+- renderDivFormAccordionDom(ag) 함수: 하드코딩 aria-label → `escHtml(ag.TINM) + ' 펼치기/접기'`로 동적 변경
+- 403번 줄 tempHtml의 button에 동적 aria-label 적용
+
+**UI-MWMC-10100_F.html (약관동의 모달 팝업)**
+- 검사항목 4-1: 닫기 버튼 순서 변경 (마지막으로 이동)
+- 30번 줄 title="" 빈값 → "약관동의 팝업 닫기"
+
+**fclmm0100r.jsp (상품 목록 화면)**
+- "상품보기" 버튼에 상품명 추가: `aria-label="${lowBasWsr.WRS_HGNM} 상품보기"`
+- 키워드 필터 버튼: title="" → "키워드 필터 펼치기", blind 텍스트 구체화
+
+**fcjim1400r.jsp (추가정보 입력)**
+- 검사항목 6-2 (색상만으로 상태 구분): CSS 수정 필요 → 퍼블 담당으로 패스
+- 차량번호 input vhrNo의 aria-label="123서1234" → "내 차량 번호 입력"으로 변경
+
+#### 기술 학습 사항
+- **title 속성 vs JS 셀렉터**: `.attr("title", ...)` = 값 세팅(set), `$("[title='...']")` = 셀렉팅(select). 셀렉팅하지 않으면 title 값 변경 안전
+- **동적 HTML에서 aria-label**: 함수 파라미터(ag.TINM 등)를 escHtml()로 XSS 방지 후 aria-label에 삽입
+- **PT/MT/앱 범위 구분**: 접근성심사가 MT 기준 → MT 코드만 수정. PT는 iOS/Android 심사에서 별도 대응
+- **퍼블 파일**: UI-MWMC-XXXXX.html = 퍼블리셔가 만든 HTML 마크업, JSP가 이 구조 참고
+
+### [접근성] 퍼블리셔 미팅 — 추가 수정 사항 정리
+- **상태**: 보류
+- **내용**: 포커스 순서 변경, 선택됨/미선택 title, 미승인내역 a→div 변환 등
+- **대기**: 퍼블리셔 파일 참고해서 추가 작업 예정
+
+### [CONFIG] ti_config.yml 당행상품이동 모바일브릿지 URL 추가
+- **상태**: 부분 완료
+- **완료**: local/dev/predev 3개 환경에 `URL: "03": "11": "URL"` 추가
+- **대기**: 운영환경(dr/run) URL 미정 → 팀장에게 URL 받은 후 추가
+
+### [EFFCCOM] git 충돌 해결
+- **상태**: 해결
+- **문제**: pull 시 `MERGE_HEAD exists` 에러 + 2개 파일 충돌
+- **해결**: `git merge --abort` → `git reset --hard origin/local` → pull → 충돌 2건 "상대 것으로 해결"
+- **주의**: EFFCCOM은 내 코드가 아님. 커밋하면 안 됨, 충돌 시 항상 원격 기준으로 해결
+
+### [기타] .gitignore 실수 복구
+- **상태**: 해결
+- **문제**: 접근성 수정 JSP 커밋 시 .gitignore가 같이 스테이지됨
+- **해결**: 커밋 되돌리기 → JSP 파일만 선택해서 재커밋
+- **배운 점**: 커밋 전 스테이지 목록 반드시 확인. 의도하지 않은 파일이 올라가지 않았는지 체크
+
+### [학습] 팀장 다운로드 코드 패턴 — study-practice.md 세션 7 추가
+- **상태**: 완료
+- **내용**: fcmam0100r.jsp의 mvDownLoad 함수 분석 → study-practice.md에 세션 7로 추가
+- **핵심 패턴**: yml → SpringContext.getProperty → JSP `<c:set>` → JS `'${변수}'` → OS/앱타입 분기 → openWebPage
+- **비교**: getNhbUrl (TI config yml 계층), getEffcCore (TI 서비스 yml 매핑)과의 차이
+
+### 남은 할 일
+- [ ] 퍼블리셔 파일 참고 추가 접근성 수정 (포커스 순서, 선택됨 title 등)
+- [ ] ti_config.yml 운영환경(dr/run) URL 추가
+- [ ] TS-CP-0031 나머지 케이스(002~004, 006) 진행
+- [ ] 배포리스트 엑셀 작성
+- [ ] MT 실기기 테스트
+- [ ] 스크래핑 연결 후 MCI 4필드 실데이터 재테스트
+- [ ] 하드코딩 코드 전부 원복 (커밋 전)
+
 <!-- 템플릿
 ### [카테고리] 제목
 - **상태**: 해결 / 미해결 / 보류

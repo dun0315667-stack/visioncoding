@@ -259,6 +259,99 @@ fctcb1100tS.java에서 아래 변수들의 출처를 각각 찾아봐:
 
 ---
 
+## 세션 7: JSP→JS 변수 전달 & 환경별 URL 분기 (팀장 다운로드 코드)
+
+> 실제 커밋된 코드: fcmam0100r.jsp (메인 화면) mvDownLoad 함수
+> 패턴: 서버 설정값 → JSP EL → JS 변수 → OS/앱타입 분기 → 외부 URL 호출
+
+### 7-1. 전체 구조 파악
+
+이 코드의 흐름:
+```
+[yml 설정파일]                     [JSP (서버사이드)]              [JS (클라이언트)]
+MAIN_ANDROID_A=https://...  →  SpringContext.getProperty  →  ${MAIN_ANDROID_A}  →  mvDownLoad('A')
+MAIN_IOS_S=https://...      →  <c:set var=.../>           →  ${MAIN_IOS_S}      →  mvDownLoad('S')
+```
+
+- [ ] fcmam0100r.jsp 열기 (`Ctrl+Shift+R`)
+- [ ] `Ctrl+F` → "mvDownLoad" 검색 → 함수 위치 확인
+- [ ] `Ctrl+F` → "MAIN_ANDROID" 검색 → JSP 상단의 `<c:set>` 태그 위치 확인
+- [ ] 질문: `<c:set var="devOs" value="${RESULT_MAP.get('devOs')}"/>` — devOs는 어디서 오는가?
+
+### 7-2. JSP 변수 선언부 분석
+
+```jsp
+<%-- 서버 설정에서 URL 가져오기 --%>
+<c:set var="devOs" value="${RESULT_MAP.get('devOs')}"/>
+<c:set var="MAIN_ANDROID_A" value="${SpringContext.getProperty('MAIN_ANDROID_A')}"/>
+<c:set var="MAIN_ANDROID_S" value="${SpringContext.getProperty('MAIN_ANDROID_S')}"/>
+<c:set var="MAIN_IOS_A" value="${SpringContext.getProperty('MAIN_IOS_A')}"/>
+<c:set var="MAIN_IOS_S" value="${SpringContext.getProperty('MAIN_IOS_S')}"/>
+```
+
+- [ ] 각 변수의 출처 구분:
+  - `devOs` → RESULT_MAP = 컨트롤러가 put한 값 (고객 디바이스 OS)
+  - `MAIN_ANDROID_A` → SpringContext.getProperty = **yml 설정파일** 값
+- [ ] `Ctrl+H` → "MAIN_ANDROID_A" → `*.yml,*.properties` → 어떤 설정파일에 정의됐는지 찾기
+- [ ] 환경별(local/dev/run) 값이 다른지 확인 → **같은 키, 다른 값** 패턴 이해
+
+### 7-3. HTML 버튼 ↔ JS 함수 연결
+
+```html
+<button class="btn-app-download ico-smart"
+        aria-label="NH스마트뱅킹 다운로드"
+        onclick="mvDownLoad('S')">다운로드</button>
+
+<button class="btn-app-download ico-allone"
+        aria-label="NHallone 다운로드"
+        onclick="mvDownLoad('A')">다운로드</button>
+```
+
+- [ ] 'S' = 스마트뱅킹, 'A' = 올원뱅크 — appGbn 파라미터로 구분
+- [ ] aria-label이 각 버튼마다 다른 이유 → 접근성 (스크린리더 구분용)
+- [ ] onclick에서 JS 함수 직접 호출 — fg.sf.exec 패턴 아님 (외부 URL 단순 이동)
+
+### 7-4. JS 함수 — OS + 앱타입 이중 분기
+
+```javascript
+function mvDownLoad(appGbn){
+    var devOs = '${devOs}';  // ← JSP EL이 서버에서 치환됨
+    if(devOs == "Android"){
+        if(appGbn == "A"){ openWebPage('${MAIN_ANDROID_A}',function(ret){}); }
+        else if(appGbn == "S"){ openWebPage('${MAIN_ANDROID_S}',function(ret){}); }
+    } else if(devOs == "iOS"){
+        if(appGbn == "A"){ openWebPage('${MAIN_IOS_A}',function(ret){}); }
+        else if(appGbn == "S"){ openWebPage('${MAIN_IOS_S}',function(ret){}); }
+    }
+}
+```
+
+- [ ] `var devOs = '${devOs}'` — 이 줄이 **서버에서** 실행되면 `var devOs = 'Android'`로 치환됨
+- [ ] 브라우저 소스보기(F12)에서 확인하면 이미 값이 들어가 있음
+- [ ] `openWebPage` — 농협 프레임워크 함수, 외부 URL을 여는 공통 함수
+- [ ] 질문: PC(PT)에서 이 함수 실행하면? → devOs가 Android/iOS 아니면 아무 동작 안 함
+
+### 7-5. 핵심 패턴 정리 & 응용 연습
+
+**패턴**: yml → SpringContext.getProperty → JSP `<c:set>` → JS `'${변수}'` → 분기 로직
+
+- [ ] 이 패턴을 쓰는 다른 코드 찾기: `Ctrl+H` → "SpringContext.getProperty" → `*.jsp`
+- [ ] getNhbUrl("03","11")과 비교: 같은 목적(환경별 URL), 다른 방식(JS 내 호출 vs JSP EL)
+- [ ] ti_config.yml의 URL 매핑과 비교: `J011.URL.03.11` = getNhbUrl이 읽는 키
+
+**쓰임 비교표**:
+| 방식 | 코드 | 언제 쓰나 |
+|------|------|----------|
+| SpringContext.getProperty | `${SpringContext.getProperty('KEY')}` | 단순 값 1개 (URL, 플래그) |
+| getNhbUrl | `getNhbUrl("03","11")` | TI config yml 계층 구조에서 꺼낼 때 |
+| getEffcCore | `TIUtil.getEffcCore("aflcnC", value)` | TI 서비스 안에서 yml 매핑 읽을 때 |
+
+- [ ] 위 3가지 방식 각각 실제 코드에서 1개씩 찾아보기
+
+**세션 7 완료 기준**: JSP EL로 서버 값이 JS에 전달되는 구조를 설명할 수 있고, 환경별 URL 분기 패턴을 이해함
+
+---
+
 ## 진행 체크리스트
 
 | 세션 | 주제 | 상태 | 완료일 |
@@ -269,6 +362,7 @@ fctcb1100tS.java에서 아래 변수들의 출처를 각각 찾아봐:
 | 4 | 데이터 흐름 추적 | [ ] | |
 | 5 | 커버리지 실전 | [ ] | |
 | 6 | 환경/설정 파일 | [ ] | |
+| 7 | JSP→JS 변수 전달 & URL 분기 | [ ] | |
 
 ---
 
@@ -317,5 +411,14 @@ lnRqJobC 세팅 위치:
 ```
 (설정 파일에서 발견한 것 여기에 적기)
 
+
+```
+
+### 세션 7 메모
+```
+(mvDownLoad 관련 발견한 것 여기에 적기)
+SpringContext.getProperty 키 위치:
+devOs 출처:
+openWebPage vs fg.sf.exec 차이:
 
 ```

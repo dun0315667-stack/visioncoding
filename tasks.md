@@ -545,6 +545,8 @@
   2. 콘솔에서 `document.querySelector('셀렉터')` 로 요소 리턴 확인
   3. `querySelectorAll('셀렉터').length` 로 고유성 검증 (1이어야 안전)
   4. 3 이상이면 부모 클래스(`.slide`)를 조합해서 좁히기
+- **트러블슈팅**: `function() => {}` 문법 에러 → 파일 전체 파싱 실패 → productDetail ReferenceError → 페이지 멈춤. `function() {}`과 `() => {}` 절대 섞지 말 것
+- **적용 완료**: 문법 수정 후 포커스 이동 정상 동작 확인
 
 ### [MCI] 사업자 업종코드 분기 설계 — PL 회의
 - **상태**: 설계 완료, 구현 예정

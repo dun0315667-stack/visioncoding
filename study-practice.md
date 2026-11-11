@@ -578,6 +578,161 @@ $("#share").on("click", function(){
 | 7 | JSP→JS 변수 전달 & URL 분기 | [ ] | |
 | 8 | MCI 필드 세팅 경로 & ARIA 속성 | [ ] | |
 | 9 | DOM 셀렉터 검증 & 팝업 포커스 제어 | [ ] | |
+| 10 | JavaScript 기초 — 함수 선언, 화살표 함수, 문법 에러 | [ ] | |
+
+---
+
+## 세션 10: JavaScript 기초 — 함수 3가지 형태 & 실수 패턴
+
+### 10-1. 함수 선언 3가지 방식
+
+JavaScript에서 함수를 만드는 방법이 3가지 있다. 섞어 쓰면 문법 에러 난다.
+
+```javascript
+// 1. 함수 선언문 (function declaration)
+function sayHello() {
+    console.log('안녕');
+}
+
+// 2. 함수 표현식 (function expression) — 변수에 담기
+var sayHello = function() {
+    console.log('안녕');
+};
+
+// 3. 화살표 함수 (arrow function) — ES6
+var sayHello = () => {
+    console.log('안녕');
+};
+```
+
+**절대 섞지 마:**
+```javascript
+// 이거 문법 에러!
+function() => {  }   // function이랑 => 같이 쓰면 안 됨
+```
+
+- [ ] F12 콘솔에서 세 가지 방식으로 함수 만들어보기
+- [ ] `function() => {}` 쳐보기 → `SyntaxError` 확인
+
+### 10-2. 화살표 함수 vs 일반 함수 — 언제 뭘 쓰나
+
+```javascript
+// 이 두 개는 거의 같다:
+fcPop.modalOpen('FCCOP0120P', {}, () => {}, this);
+fcPop.modalOpen('FCCOP0120P', {}, function() {}, this);
+
+// 차이점: this 바인딩
+// 화살표 함수: 바깥 this를 그대로 씀
+// 일반 함수: 자기만의 this를 가짐
+```
+
+**실무 규칙**: 농협 코드에서는 대부분 `function()` 쓰고 있음. 기존 코드 스타일 따라가는 게 안전. 콜백에 코드를 넣어야 할 때는 `function() {}` 쓰기.
+
+```javascript
+// 빈 콜백 (아무것도 안 함)
+() => {}              // OK
+function() {}         // OK
+
+// 코드 넣을 때
+function() {          // 이걸 쓰기
+    // 여기에 코드
+}
+```
+
+- [ ] 기존 프로젝트 코드에서 `() =>` 검색해보기 — 어디서 쓰는지 확인
+- [ ] 같은 파일에서 `function(` 검색 — 어느 쪽이 더 많은지 비교
+
+### 10-3. 콜백 안에 코드 넣기 — 중괄호/괄호/세미콜론 짝 맞추기
+
+콜백에 코드를 넣을 때 가장 흔한 실수는 **닫는 괄호 짝이 안 맞는 것**:
+
+```javascript
+// 원본 — 빈 콜백
+fcPop.modalOpen('FCCOP0120P', {}, () => {}, this);
+//                                 ↑    ↑
+//                              여기가 콜백 시작/끝
+
+// 수정 — 코드 넣기
+fcPop.modalOpen('FCCOP0120P', {}, function() {
+    // 여기에 코드
+    window.setTimeout(function(){
+        var el = document.querySelector('.slide .modal-window');
+        if(el) {
+            el.focus();
+        }
+    }, 100);                          // setTimeout 닫기: )
+}, this);                             // modalOpen 닫기: )
+//↑ 이 콤마 빠뜨리면 에러
+```
+
+**짝 맞추기 방법:**
+```
+fcPop.modalOpen(          ← 열기 1
+    'FCCOP0120P',
+    {},
+    function() {          ← 열기 2 (콜백 함수)
+        setTimeout(       ← 열기 3
+            function(){   ← 열기 4
+                ...
+            }             ← 닫기 4
+        , 100);           ← 닫기 3 + 세미콜론
+    }                     ← 닫기 2
+, this);                  ← 닫기 1 + 세미콜론
+```
+
+- [ ] 위 코드를 보고 열기/닫기 번호를 손으로 매겨보기
+- [ ] STS에서 괄호 위에 커서 놓으면 짝이 하이라이트됨 — 확인해보기
+
+### 10-4. JS 문법 에러의 파급력
+
+```
+JS 파일 하나에 문법 에러 1개
+→ 파일 전체 로드 실패 (파싱 에러)
+→ 이 파일의 모든 함수 undefined
+→ 다른 곳에서 이 함수 호출 시 ReferenceError
+→ 페이지 전체 멈춤
+```
+
+**오늘 겪은 사례:**
+```
+fcmap0100r.jsp에서 function() => {} 문법 에러
+→ 파일 전체 파싱 실패
+→ productDetail 함수도 undefined
+→ 콘솔: "Uncaught ReferenceError: productDetail is not defined"
+→ 페이지 멈춤 (로딩바도 안 닫힘)
+```
+
+**디버깅 순서:**
+1. 콘솔에 빨간 에러 확인
+2. `SyntaxError` 보이면 → 문법 에러 (괄호/중괄호/세미콜론/function 키워드)
+3. `ReferenceError: xxx is not defined` 보이면 → xxx가 있는 파일에서 문법 에러 찾기
+4. 에러 메시지의 파일명:줄번호 클릭 → 해당 위치 확인
+
+- [ ] 일부러 JS에 `function() => {}` 넣어보고 콘솔 에러 확인 (로컬에서)
+- [ ] 에러 메시지의 파일명:줄번호 클릭해서 이동해보기
+
+### 10-5. var, let, const — 변수 선언
+
+```javascript
+// var: 함수 스코프 (오래된 방식, 농협 코드 대부분 이거)
+var el = document.querySelector('.modal-window');
+
+// let: 블록 스코프 (ES6, 재할당 가능)
+let count = 0;
+count = 1;  // OK
+
+// const: 블록 스코프 (ES6, 재할당 불가)
+const name = '곤';
+name = '다른이름';  // 에러!
+```
+
+**실무 규칙**: 농협 기존 코드가 `var` 쓰면 `var`로 맞추기. 새 코드에서는 `let`/`const`가 더 안전하지만, 같은 파일 스타일 따라가는 게 우선.
+
+- [ ] 콘솔에서 `var a = 1; var a = 2;` → 에러 안 남 (var 재선언 허용)
+- [ ] 콘솔에서 `let b = 1; let b = 2;` → 에러 남 (let 재선언 불가)
+- [ ] 콘솔에서 `const c = 1; c = 2;` → 에러 확인
+
+**세션 10 완료 기준**: function/화살표 함수 차이를 설명할 수 있고, 콜백에 코드를 넣을 때 괄호 짝을 스스로 맞출 수 있으며, 문법 에러가 파일 전체를 죽이는 구조를 이해함
 
 ---
 

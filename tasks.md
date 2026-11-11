@@ -504,9 +504,79 @@
 - **비교**: getNhbUrl (TI config yml 계층), getEffcCore (TI 서비스 yml 매핑)과의 차이
 
 ### 남은 할 일
-- [ ] 퍼블리셔 파일 참고 추가 접근성 수정 (포커스 순서, 선택됨 title 등)
+- [x] 퍼블리셔 파일 참고 추가 접근성 수정 (포커스 순서, 선택됨 title 등) → 11/11 대부분 완료
 - [ ] ti_config.yml 운영환경(dr/run) URL 추가
 - [ ] TS-CP-0031 나머지 케이스(002~004, 006) 진행
+- [ ] 배포리스트 엑셀 작성
+- [ ] MT 실기기 테스트
+- [ ] 스크래핑 연결 후 MCI 4필드 실데이터 재테스트
+- [ ] 하드코딩 코드 전부 원복 (커밋 전)
+
+---
+
+## 2026-11-11
+
+### [접근성] MT 접근성심사 추가 수정 — 퍼블 피드백 반영
+- **상태**: 완료
+- **수정 내용**:
+  1. **fcagm0102p.jsp (약관동의 팝업, MT)**: `.attr("title", "상세 동의 팝업 열기 선택됨/선택안됨")` 4줄 전체 삭제 (퍼블 지시 — 불필요한 텍스트 정보 제거)
+  2. **fcagm0100r.jsp (약관동의 화면, MT)**: renderDivFormAccordionDom 함수에서 aria-label 삭제 → `aria-describedby="agChk" + ag.STLT_EXPS_SQNO` + `<span class="blind">` + `escHtml(ag.TINM)` 추가
+  3. **선형화 순서 (util-box)**: 닫기/다운로드 버튼 DOM 순서 swap (CSS flex-direction: row-reverse로 시각적 순서 유지)
+  4. **미승인내역 displayHtml**: 대출불가 상품의 `<a href="javascript:void(0);" role="button">` → `<div>`로 변환
+- **트러블슈팅**:
+  - aria-describedby 수정 후 내용 안 나옴 → 원인: `sqno`는 agInputDom 내부 변수, renderDivFormAccordionDom에서는 `ag.STLT_EXPS_SQNO` 사용해야 함
+  - blind span 추가 시 aria-describedby와 중복 읽기 가능성 → 퍼블 지시대로 둘 다 적용
+- **배운 점**:
+  - `aria-label` = 텍스트 직접 삽입, `aria-describedby` = 다른 요소 id 참조
+  - `<span class="blind">` = 시각적으로 숨기되 스크린리더가 읽는 공통 CSS 클래스
+  - 함수 간 변수 스코프 주의: 다른 함수의 지역변수를 참조하면 undefined 에러 → 렌더링 전체 멈춤
+
+### [접근성] PT 접근성심사 대응 — title 삭제 + 포커스 이동
+- **상태**: 진행 중
+- **수정 내용**:
+  1. **fcagp0100r.jsp (약관동의, PT)**: setChecked 함수 내 `.attr('title', isOn ? '상세 동의 팝업 열기 선택됨' : '선택안됨')` 2줄 삭제 (MT와 동일 지적)
+  2. **fcmap0100r.jsp (공유하기 팝업, PT)**: 포커스 이동 — `window.setTimeout(function(){ popup.focus(); }, 100)` + `tabindex="-1"` 추가 예정
+- **대기**: PT 공유하기 팝업 포커스 이동 구현
+
+### [MCI] 사업자 업종코드 분기 설계 — PL 회의
+- **상태**: 설계 완료, 구현 예정
+- **배경**: MCI 사업자 가심사요청 시 4필드 중 국세청업종코드(nts_pnp_bzcc)가 빈값으로 나감
+- **PL 지시**: 스크래핑 Y/N을 "보내냐 마냐"가 아니라 "어디서 값을 가져오냐"의 분기로 변경
+- **설계**:
+  - 기존 ps111 쿼리(fctcb01_sql.xml)에 LEFT OUTER JOIN 이미 있음 (홈텍스 H + 비교신청관리 R)
+  - SELECT 컬럼만 수정:
+    - `NVL(H.COMM_BZMN_YN, 'N')` — 공동사업자여부
+    - `CASE WHEN H.NTS_BZCC IS NOT NULL THEN H.NTS_BZCC ELSE CASE R.BZMN_BZCC WHEN '1' THEN '369908' ... END END` — 업종코드
+    - `NVL(H.DLQ_YN, 'N')` — 체납여부
+  - Java if/else 분기 안 건드림, SQL에서 NULL 처리
+- **업종코드 매핑** (비교신청관리 BZMN_BZCC → NH API 코드):
+  | BZMN_BZCC | 분류 | NH API 코드 |
+  |-----------|------|------------|
+  | 1 | 제조업 | 369908 |
+  | 2 | 도소매업 | 523999 |
+  | 3 | 운수업 | 630909 |
+  | 4 | 음식/숙박/교육/기타 | 930925 |
+- **확인 필요**: BZMN_BZCC가 NULL인 경우(스크래핑 실패 + 직접입력 안 함) 기본값 처리 여부 → PL 확인
+
+### [MCI] PT 더미로그인 사업자 테스트 제약
+- **상태**: 조사 완료
+- **증상**: 더미로그인 + 본인인증(실 주민번호) 해도 사업자 MCI 안 나감
+- **원인**:
+  1. 더미 고객번호에 사업자 데이터 없음 → jonCls≠"5" → 사업자 분기 미진입
+  2. 스크래핑 스킵해도 jonCls 문제는 해결 안 됨 (첫 번째 관문)
+  3. 주민번호 암호화: `encrytedRlno` 하드코딩해도 `setApiBody`의 74번 줄 `reqMap.put("cusPwizeRlno", tiUtil.safeTrim(map101, "RRNo"))` 가 별도로 덮어씀
+- **결론**: 로컬/더미로그인으로는 사업자 MCI 전체 흐름 테스트 불가. dev 배포 + 실 인증 기준 테스트 필요
+- **배운 점**:
+  - MCI 전문은 `setMciBody`(바디)와 `setApiBody`(공통헤더) 두 곳에서 필드 세팅 — 하나만 수정하면 다른 쪽이 덮어쓸 수 있음
+  - `pwize_tr_rlno`(바디)와 `cusPwizeRlno`=`RRNo`(헤더)는 서로 다른 필드
+  - 더미 로그인 = 고객번호 기반 데이터 없음. 본인인증(주민번호)과 고객번호는 별개 개념
+
+### 남은 할 일
+- [ ] ps111 쿼리 업종코드 CASE WHEN 수정 (fctcb01_sql.xml)
+- [ ] BZMN_BZCC NULL 처리 방침 PL 확인
+- [ ] PT 공유하기 팝업 포커스 이동 구현 (fcmap0100r.jsp)
+- [ ] 퍼블에게 MT common.css 업데이트 요청 (flex-direction: row-reverse)
+- [ ] ti_config.yml 운영환경(dr/run) URL 추가
 - [ ] 배포리스트 엑셀 작성
 - [ ] MT 실기기 테스트
 - [ ] 스크래핑 연결 후 MCI 4필드 실데이터 재테스트

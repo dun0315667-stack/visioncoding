@@ -352,6 +352,84 @@ function mvDownLoad(appGbn){
 
 ---
 
+## 세션 8: MCI 전문 필드 세팅 경로 추적 & 접근성 ARIA 속성
+
+### 8-1. MCI 전문의 두 가지 세팅 경로
+
+MCI 전문은 **바디(setMciBody)**와 **공통헤더(setApiBody)** 두 곳에서 필드가 세팅됨.
+같은 데이터(예: 주민번호)도 필드명이 다르게 들어감:
+
+| 구분 | 메서드 | 파일 | 주민번호 필드명 |
+|------|--------|------|---------------|
+| 바디 | setMciBody | fctcb1101tS.java | pwize_tr_rlno (encrytedRlno) |
+| 공통헤더 | setApiBody | fctcb1101tS.java | cusPwizeRlno (map101의 "RRNo") |
+
+- [ ] fctcb1101tS.java에서 `setMciBody` 메서드 찾기 → 어떤 필드를 세팅하는지 목록화
+- [ ] 같은 파일에서 `setApiBody` 메서드 찾기 → 어떤 필드를 세팅하는지 목록화
+- [ ] 두 메서드가 겹치는 데이터(주민번호, 고객명 등)를 확인
+
+**핵심**: 하나만 수정하면 다른 쪽이 덮어쓸 수 있음. 디버깅 시 콘솔에 찍히는 필드명이 어느 경로인지 먼저 확인
+
+### 8-2. SQL에서 NULL 분기 처리 (NVL, CASE WHEN)
+
+스크래핑 성공/실패를 Java if/else가 아닌 **SQL에서 처리**하는 패턴:
+
+```sql
+-- LEFT OUTER JOIN: 홈텍스 데이터 없으면 H 컬럼 전부 NULL
+FROM 비교신청관리 R
+LEFT OUTER JOIN 홈텍스사업자 H ON R.키 = H.키
+
+-- NVL: NULL이면 기본값
+NVL(H.COMM_BZMN_YN, 'N')  -- 스크래핑 실패 시 'N'
+
+-- CASE WHEN: 조건별 치환
+CASE WHEN H.NTS_BZCC IS NOT NULL 
+     THEN H.NTS_BZCC              -- 스크래핑 성공: 원본값
+     ELSE CASE R.BZMN_BZCC        -- 스크래핑 실패: 직접입력값 치환
+          WHEN '1' THEN '369908'
+          WHEN '2' THEN '523999'
+          END
+END
+```
+
+- [ ] fctcb01_sql.xml에서 ps111 쿼리 찾기 → LEFT OUTER JOIN 구조 확인
+- [ ] NVL과 CASE WHEN이 각각 어떤 상황에 적합한지 구분
+
+**핵심**: Java 분기 vs SQL 분기 — 쿼리 하나로 해결 가능하면 SQL이 깔끔. Java if/else 구조를 안 건드려도 됨
+
+### 8-3. 웹 접근성 ARIA 속성 정리
+
+| 속성 | 역할 | 사용법 |
+|------|------|--------|
+| aria-label | 요소에 직접 텍스트 삽입 | `aria-label="개인정보 동의 펼치기"` |
+| aria-describedby | 다른 요소의 id 참조 | `aria-describedby="agChk3"` → id="agChk3"인 요소 텍스트를 읽음 |
+| aria-expanded | 접힘/펼침 상태 | `aria-expanded="false"` → 스크린리더가 "접힘" 읽음 |
+| role="button" | 비버튼 요소를 버튼으로 | `<div role="button">` → 스크린리더가 "버튼"으로 인식 |
+
+- [ ] DevTools → Accessibility 탭에서 요소 선택 → ARIA 속성 확인해보기
+- [ ] `<span class="blind">숨긴 텍스트</span>` → 화면에 안 보이지만 스크린리더가 읽음
+
+**함수 간 변수 스코프 주의**:
+```javascript
+// agInputDom 함수 안
+function agInputDom(ag) {
+    var sqno = ag.STLT_EXPS_SQNO;  // 이 함수 안에서만 유효
+    // id="agChk" + sqno
+}
+
+// renderDivFormAccordionDom 함수 안
+function renderDivFormAccordionDom(ag) {
+    // sqno 쓰면 → undefined 에러 → 렌더링 전체 멈춤!
+    // ag.STLT_EXPS_SQNO 써야 함
+}
+```
+
+- [ ] JSP에서 동적 HTML 생성하는 함수 찾아서, 다른 함수의 변수를 참조하고 있지 않은지 확인
+
+**세션 8 완료 기준**: MCI 전문의 바디/헤더 이중 세팅 구조를 이해하고, SQL NULL 분기와 ARIA 속성 사용법을 설명할 수 있음
+
+---
+
 ## 진행 체크리스트
 
 | 세션 | 주제 | 상태 | 완료일 |
@@ -363,6 +441,7 @@ function mvDownLoad(appGbn){
 | 5 | 커버리지 실전 | [ ] | |
 | 6 | 환경/설정 파일 | [ ] | |
 | 7 | JSP→JS 변수 전달 & URL 분기 | [ ] | |
+| 8 | MCI 필드 세팅 경로 & ARIA 속성 | [ ] | |
 
 ---
 

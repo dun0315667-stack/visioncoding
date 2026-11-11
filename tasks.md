@@ -535,8 +535,16 @@
 - **상태**: 진행 중
 - **수정 내용**:
   1. **fcagp0100r.jsp (약관동의, PT)**: setChecked 함수 내 `.attr('title', isOn ? '상세 동의 팝업 열기 선택됨' : '선택안됨')` 2줄 삭제 (MT와 동일 지적)
-  2. **fcmap0100r.jsp (공유하기 팝업, PT)**: 포커스 이동 — `window.setTimeout(function(){ popup.focus(); }, 100)` + `tabindex="-1"` 추가 예정
-- **대기**: PT 공유하기 팝업 포커스 이동 구현
+  2. **fcmap3100r.jsp (PT 메인)**: 금융사선택 버튼 2개(line 69, 124) 삭제 — 퍼블 HTML(UI-MWMC-70000)에 없음, 접근성 진단서 PT 지적
+  3. **fcmap0100r.jsp (공유하기 팝업, PT)**: 포커스 이동 구현
+     - FCCOP0120P.jsp: `<div class="modal-window">` → `<div class="modal-window" tabindex="-1">`
+     - fcmap0100r.jsp: `fcPop.modalOpen('FCCOP0120P')` 콜백에 `setTimeout` + `.focus()` 추가
+     - 셀렉터 확정 과정: `#FCCOP0120Pmodal .modal-window` → null / `.modal-window` → 3개 / `.slide .modal-window` → 공유하기 팝업만 특정됨
+- **셀렉터 확정 방법론**:
+  1. F12 Elements breadcrumb에서 부모→자식 구조 파악
+  2. 콘솔에서 `document.querySelector('셀렉터')` 로 요소 리턴 확인
+  3. `querySelectorAll('셀렉터').length` 로 고유성 검증 (1이어야 안전)
+  4. 3 이상이면 부모 클래스(`.slide`)를 조합해서 좁히기
 
 ### [MCI] 사업자 업종코드 분기 설계 — PL 회의
 - **상태**: 설계 완료, 구현 예정
@@ -575,7 +583,7 @@
 ### 남은 할 일
 - [ ] ps111 쿼리 업종코드 CASE WHEN 수정 (fctcb01_sql.xml)
 - [ ] BZMN_BZCC NULL 처리 방침 PL 확인
-- [ ] PT 공유하기 팝업 포커스 이동 구현 (fcmap0100r.jsp)
+- [x] PT 공유하기 팝업 포커스 이동 설계 완료 (fcmap0100r.jsp + FCCOP0120P.jsp, 셀렉터: `.slide .modal-window`)
 - [ ] 퍼블에게 MT common.css 업데이트 요청 (flex-direction: row-reverse)
 - [ ] ti_config.yml 운영환경(dr/run) URL 추가
 - [ ] 배포리스트 엑셀 작성

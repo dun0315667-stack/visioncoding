@@ -430,6 +430,141 @@ function renderDivFormAccordionDom(ag) {
 
 ---
 
+## 세션 9: JavaScript DOM 셀렉터 검증 & 팝업 포커스 제어
+
+### 9-1. DOM 셀렉터를 확실하게 잡는 방법
+
+코드에 셀렉터를 넣기 전에 **반드시 콘솔에서 검증**해야 한다. 추측으로 넣으면 null이거나 엉뚱한 요소에 걸린다.
+
+**단계별 검증 프로세스:**
+
+```
+Step 1: F12 → Elements 탭에서 대상 요소 선택
+        하단 breadcrumb에서 부모→자식 구조 확인
+        예: html > body > div#FCCOP0120Pmodal.slide > div.modal-window
+
+Step 2: 콘솔에서 querySelector로 실제 리턴 확인
+        document.querySelector('#FCCOP0120Pmodal .modal-window')
+        → null이면 셀렉터 틀린 것. 다시 확인
+
+Step 3: querySelectorAll로 고유성 검증
+        document.querySelectorAll('.modal-window').length
+        → 1이면 안전, 2이상이면 더 좁혀야 함
+
+Step 4: 부모 클래스 조합으로 좁히기
+        document.querySelector('.slide .modal-window')
+        → 특정 팝업만 잡히면 확정
+```
+
+- [ ] 아무 페이지에서 F12 열고 요소 하나 선택 → breadcrumb 읽기
+- [ ] 콘솔에서 `document.querySelector('.클래스명')` 직접 쳐보기 — 요소 나오면 마우스 올려서 하이라이트 확인
+- [ ] `document.querySelectorAll('.클래스명').length` 로 페이지에 몇 개 있는지 확인
+
+**핵심**: breadcrumb에서 보인 id나 클래스가 실제 querySelector에서 null 나올 수 있다. 팝업처럼 동적으로 생성되는 요소는 **열린 상태에서** 콘솔 검증해야 한다.
+
+### 9-2. tabindex와 focus() — 포커스 제어 기초
+
+```javascript
+// tabindex 종류
+tabindex="0"   // Tab 키 순서에 포함 (자연 순서)
+tabindex="-1"  // Tab으로는 안 가지만, JS .focus()로는 갈 수 있음
+tabindex="1+"  // 강제 순서 지정 (비추천 — 접근성 혼란)
+```
+
+div, span 같은 비포커스 요소는 기본적으로 focus()가 안 먹는다.
+`tabindex="-1"`을 추가하면 JS에서 `.focus()` 호출 가능해짐.
+
+```html
+<!-- 변경 전: focus 불가 -->
+<div class="modal-window">
+
+<!-- 변경 후: JS focus 가능 -->
+<div class="modal-window" tabindex="-1">
+```
+
+- [ ] 콘솔에서 `document.querySelector('.modal-window').focus()` 쳐보기 — tabindex 없으면 포커스 안 잡힘
+- [ ] tabindex="-1" 추가 후 다시 `.focus()` → Accessibility 탭에서 포커스 확인
+
+### 9-3. setTimeout — 왜 필요한가
+
+```javascript
+fcPop.modalOpen('FCCOP0120P', {}, function() {
+    // 이 콜백은 팝업 열기 시작 후 실행됨
+    // 하지만 DOM이 완전히 렌더링되기 전일 수 있음
+    
+    window.setTimeout(function(){
+        var el = document.querySelector('.slide .modal-window');
+        if(el) {
+            el.focus();  // DOM 준비된 후 포커스
+        }
+    }, 100);  // 100ms 대기
+}, this);
+```
+
+**왜 setTimeout을 쓰는가:**
+- `modalOpen` 콜백이 실행되는 시점에 팝업 DOM이 아직 화면에 없을 수 있음
+- 특히 CSS 애니메이션(slide)이 있으면 요소는 있지만 위치/크기가 0일 수 있음
+- 100ms 정도 기다리면 애니메이션 시작 후 포커스 가능
+
+**주의**: setTimeout의 숫자(100)는 보장이 아니라 "대략 이 정도 후"라는 의미. 팝업이 느리면 200으로 올려볼 것.
+
+- [ ] setTimeout 없이 바로 `.focus()` 해보기 → 포커스 안 잡히면 타이밍 문제
+- [ ] 100ms → 200ms → 300ms 늘려가면서 어디서 잡히는지 확인
+
+### 9-4. 콜백 함수 — 세 번째 파라미터
+
+```javascript
+// fcPop.modalOpen의 파라미터 구조:
+fcPop.modalOpen(
+    'FCCOP0120P',     // 1번째: 팝업 ID (JSP 파일명)
+    {},                // 2번째: 전달할 데이터
+    function() { },    // 3번째: 콜백 — 팝업 열린 후 실행할 코드
+    this               // 4번째: 컨텍스트
+);
+
+// () => {} 도 같은 의미 (화살표 함수)
+// 빈 콜백 = 아무것도 안 하겠다는 뜻
+// 여기에 코드를 넣으면 팝업 열린 후 자동 실행
+```
+
+**콜백이란**: "이 작업 끝나면 이 함수 실행해줘"라는 예약.
+공통 함수(`fcPop.modalOpen`)를 수정하지 않고도, 콜백 안에서 추가 동작(포커스 이동 등)을 넣을 수 있다.
+
+- [ ] 기존 코드에서 `() => {}`를 `function(){ console.log('팝업 열림'); }`으로 바꿔서 콘솔 출력 확인
+- [ ] `function()` 안에 여러 줄 코드 넣어보기 (console.log + alert 등)
+
+### 9-5. 실전 적용 — 공유하기 팝업 포커스 이동
+
+**최종 코드 (fcmap0100r.jsp):**
+```javascript
+$("#share").on("click", function(){
+    common_showInitLodingBar()
+    fcPop.modalOpen('FCCOP0120P', {}, function() {
+        window.setTimeout(function(){
+            var el = document.querySelector('.slide .modal-window');
+            if(el) {
+                el.focus();
+            }
+        }, 100);
+    }, this);
+});
+```
+
+**FCCOP0120P.jsp:**
+```html
+<div class="modal-window" tabindex="-1">
+```
+
+**적용 후 검증 방법:**
+1. 팝업 열기
+2. F12 → Elements에서 `.modal-window` 선택
+3. Accessibility 탭 확인 → Focused: true 여부
+4. Tab 키 눌러보기 → 팝업 안에서 순서대로 이동하는지
+
+**세션 9 완료 기준**: querySelector 콘솔 검증을 습관화하고, tabindex/focus/setTimeout/콜백 각각의 역할을 설명할 수 있음
+
+---
+
 ## 진행 체크리스트
 
 | 세션 | 주제 | 상태 | 완료일 |
@@ -442,6 +577,7 @@ function renderDivFormAccordionDom(ag) {
 | 6 | 환경/설정 파일 | [ ] | |
 | 7 | JSP→JS 변수 전달 & URL 분기 | [ ] | |
 | 8 | MCI 필드 세팅 경로 & ARIA 속성 | [ ] | |
+| 9 | DOM 셀렉터 검증 & 팝업 포커스 제어 | [ ] | |
 
 ---
 

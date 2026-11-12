@@ -623,13 +623,65 @@
   - **미확정**: 전부 실패 시 MCI 자체 미전송인지, 성공 채널만 보내는지
 - **대기**: PL에게 방향 확인 필요
 
+### [접근성] PT 팝업 포커스 이동 — 입사일/연소득/면적선택
+- **상태**: 진행 중
+- **수정 내용**:
+  1. **입사일 선택 팝업 (FCCOP1300P 추정)**: 기존 `initPage()` 함수에 `setTimeout` + `.modal-window` focus 추가. 기존 `focusOn()` 함수는 `.active` 버튼 scrollIntoView용으로 접근성 포커스와 무관
+  2. **연소득 입력 팝업**: class="modal-window keypad-pop". 셀렉터: `.modal-window.keypad-pop` (고유하므로 `.slide` 불필요). initPage 내 setTimeout + tabindex + focus 추가
+  3. **면적 선택 팝업 (FCMIP2201P, 주담대)**: 셀렉터 확정 `#FCMIP2201P .modal-window`. `querySelectorAll('.modal-window')` length=2, [1]이 해당 팝업. parentElement = `div#FCMIP2201P.modal.slide`
+- **트러블슈팅**:
+  - 입사일: initPage 코드 추가 시 오타 → SyntaxError → 팝업 바디 비워짐. 오타 수정 후 해결
+  - 면적선택: `#FCMIP2201Pmodal` → null (id가 `FCMIP2201P`임). `modal-windnow` 오타 → TypeError null. tabindex 미설정 상태에서 focus() → activeElement가 li(뒤 요소)로 잡힘. setAttribute('tabindex', '-1') 선행 필요
+- **면적선택 미완료**: tabindex + focus 패턴 확정됨, 실제 JSP 코드 적용 아직 안 됨
+
+### [MCI] 1:N 테스트 — 관리자페이지 결과통지 확인
+- **상태**: 확인 중
+- **배경**: PL 주간회의 후 지시 — "당행 MCI 1:N 경우 생보/손보로 상품 결과통지 확인"
+- **테스트 조건**: fco1003(계약대출) 상품, 440(NH생명) + 449(NH손보) 대상
+- **1:N 구조**: fcccb1100tS에서 fisCodeList for문이 제휴사별로 각각 MCI 송신. 하나의 cmprRqSqno에 여러 lnWrsC(상품)
+- **확인한 것 (440 NH생명)**:
+  - 관리자페이지: fco1003 / 440 / NH농협생명 / NA1010_IR
+  - 등록프로그램: DCB1200U (fctcb1200tS = 결과통지 역거래 수신)
+  - 수신결과: 00000 (정상)
+  - 송신전문: InWrsC="NHLIFE01", InLntAmt="23060000"
+- **남은 확인**: 449(NH손보) 건도 동일하게 정상 수신인지 확인
+- **확인 포인트 정리**:
+  1. MCI 로그사이트: 같은 cmprRqSqno로 100번 송신 N건 확인
+  2. MCI 관리자페이지: 400번 결과통지 제휴사별 각각 수신 확인
+  3. 송수신 테이블(TB_EF_FC_CH_CNTGRM_SNR): cmprRqSqno + aflcn_c로 건수 확인
+
+### [BRIDGE] brpgUrl 쿼리파라미터 분석 — 올원앱 홈 이동 이슈
+- **상태**: 조사 필요
+- **발견 사항**:
+  1. DB(TB_EF_FC_CH_LN_EXEAMN)에서 brpgUrl — 10/29에는 쿼리파람 붙어있었고, 11/03부터 안 붙음
+  2. **결론**: 파람은 PT JSP(fcmap0106r.jsp) `gotoInsurance` 함수에서 클라이언트단(JS)으로 붙이는 것 → DB에는 순수 URL만 저장이 정상. 10/29 파람 붙은 게 오히려 버그
+  3. DB에 파람이 안 붙는 것은 코드상 정상 — fctcb1300tS.java에서 brpgUrl에 파람 append 코드 없음
+- **새 이슈: 올원앱에서 홈으로 이동**:
+  - 이전: Java에서 brpgUrl에 파람 강제 추가했을 때 → 제휴사 상품 페이지로 정상 이동
+  - 현재: Java에서 파람 안 붙이니 → 제휴사 홈으로만 이동
+  - **의미**: 제휴사 사이트가 쿼리파람(lnRqSqno, rq_gbn)으로 신청 건을 식별함. 파람 없으면 홈으로 보냄
+  - **핵심 질문**: 올원앱에서 브릿지URL 이동 시 호출되는 URL = brpgUrl 값 그대로. gotoInsurance가 파람을 안 붙이고 있음
+- **내일 확인할 것**:
+  1. 올원앱에서 제휴사 이동 시 `gotoInsurance` 함수를 **타는지** 확인 (alert/브레이크포인트)
+  2. gotoInsurance를 안 탄다면 → 실제 호출 경로 추적 (어떤 JS 함수가 brpgUrl로 이동하는지)
+  3. gotoInsurance를 타는데 파람이 안 붙는다면 → 해당 함수 내부 로직 디버깅
+  4. **PL에게 확인**: brpgUrl에 lnRqSqno 파람을 서버에서 붙여야 하는지 vs 클라이언트에서 붙여야 하는지
+- **증빙 수집 (brpgUrl이 DB에 순수 URL만 저장됨을 증명)**:
+  1. fctcb1300tS.java — brpgUrl 세팅 코드 캡처 (파람 append 없음)
+  2. TB_EF_FC_CH_LN_EXEAMN SELECT — 11/03 이후 brpgUrl에 파람 없음
+  3. fcmap0106r.jsp gotoInsurance — JS에서 클라이언트단 파람 추가 코드
+
 ### 남은 할 일
+- [ ] **[긴급] 올원앱 brpgUrl 홈 이동 이슈** — gotoInsurance 함수 디버깅 + PL 확인
+- [ ] **[긴급] MCI 1:N** 449(NH손보) 결과통지 확인 + 로그사이트/관리자페이지 캡처
+- [ ] 면적 선택 팝업 (FCMIP2201P) JSP 코드에 tabindex + focus 적용
 - [ ] ps111 쿼리 업종코드 CASE WHEN 수정 (fctcb01_sql.xml) — 4필드 방향 확정 후
 - [ ] BZMN_BZCC NULL 처리 방침 PL 확인
 - [x] PT 공유하기 팝업 포커스 이동 완료 (fcmap0100r.jsp + FCCOP0120P.jsp)
 - [x] PT 약관동의 팝업 포커스 이동 완료 (FCAGP0101P.jsp)
 - [x] PT 통신사 선택 팝업 포커스 이동 완료 (FCCOP1500P.jsp)
 - [ ] 퍼블에게 MT common.css 업데이트 요청 (flex-direction: row-reverse)
+- [ ] fcjim1400r.jsp PT: 차량번호 input aria-label 추가
 - [ ] ti_config.yml 운영환경(dr/run) URL 추가
 - [ ] 배포리스트 엑셀 작성
 - [ ] MT 실기기 테스트

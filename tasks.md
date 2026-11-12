@@ -568,6 +568,16 @@
   | 4 | 음식/숙박/교육/기타 | 930925 |
 - **확인 필요**: BZMN_BZCC가 NULL인 경우(스크래핑 실패 + 직접입력 안 함) 기본값 처리 여부 → PL 확인
 - **의사결정 (11/11)**: comm_bzmn_yn(공동사업자여부), io_ptax_dlq_yn(체납여부) 두 필드는 공백으로 보내기로 결정. 황인준 과장이 제휴사에 공백 수신 시 응답 문제 없는지 확인 중
+- **의사결정 재검토 (11/12)**: 제휴사(김성현) 피드백 — 빈값 들어오면 해당 조건 자동승인 처리됨. 이게 맞는지 사업부서 확인 필요
+  - **기존 플랫폼 현황**:
+    - 카카오: 스크래핑 실패 시 고객 직접입력 → 체납여부/공동사업자여부도 선택 받음
+    - 네이버/토스: 스크래핑 실패 시 거절 → 정상건만 값 제공
+  - 황인준: 우리도 화면에서 직접입력 받도록 검토 중. 실패 시 아예 전문 안 보내고 있음
+  - **영향**: "공백 전송" 의사결정이 변경될 수 있음. 방향에 따라 ps111 쿼리 설계 달라짐:
+    1. 빈값 유지 → 현재 설계대로
+    2. 직접입력 받기 → 업종코드처럼 CASE WHEN 추가 (체납/공동사업자도)
+    3. 실패 시 전문 안 보내기 → 스크래핑 성공 여부 게이트 추가
+  - **대기**: PL에게 방향 확인 필요
 
 ### [MCI] PT 더미로그인 사업자 테스트 제약
 - **상태**: 조사 완료
@@ -582,10 +592,36 @@
   - `pwize_tr_rlno`(바디)와 `cusPwizeRlno`=`RRNo`(헤더)는 서로 다른 필드
   - 더미 로그인 = 고객번호 기반 데이터 없음. 본인인증(주민번호)과 고객번호는 별개 개념
 
+---
+
+## 2026-11-12
+
+### [접근성] PT 팝업 포커스 이동 — 추가 적용
+- **상태**: 진행 중
+- **수정 내용**:
+  1. **FCAGP0101P.jsp (약관동의 팝업, PT)**: `modal-window floating`에 `tabindex="-1"` + `initPage`에 `setTimeout` + `focus()` 추가. 셀렉터: `.modal-window.floating`. `document.activeElement` 확인 완료
+  2. **FCCOP1500P.jsp (통신사 선택 팝업, PT)**: `initPage` 함수 새로 생성. `.modal-window` 2개 존재 → `.slide .modal-window` 셀렉터로 특정. `setAttribute('tabindex', '-1')` JS에서 동적 처리 (JSP HTML 변경이 서버에 안 올라가는 문제 우회)
+  3. **FCCOP0120P.jsp (공유하기 팝업, PT)**: 11/11 완료
+- **학습 포인트**:
+  - `document.activeElement`로 현재 포커스 위치 확인
+  - `querySelectorAll('.modal-window').length`로 동일 클래스 요소 수 확인 → 2개 이상이면 셀렉터 좁히기
+  - JSP HTML 수정이 서버에 반영 안 될 때 → JS `setAttribute`로 동적 처리 가능
+  - `aria-hidden="true"` 경고: 팝업 열 때 뒤쪽에 자동 설정됨 → 포커스를 팝업으로 옮기면 해결
+- **남은 접근성 항목**:
+  - fcjim1400r.jsp PT: 차량번호 input aria-label 추가 (검출내용2)
+  - fcjim1400r.jsp PT: 색상만으로 구분 → 퍼블 담당 (검출내용1)
+
+### [MCI] 4필드 빈값 처리 — 제휴사 피드백 (의사결정 재검토)
+- **상태**: 대기
+- **내용**: 제휴사(김성현) 피드백 — 빈값 자동승인 문제. 카카오는 직접입력, 네이버/토스는 실패시 거절
+- **대기**: PL에게 방향 확인 필요
+
 ### 남은 할 일
-- [ ] ps111 쿼리 업종코드 CASE WHEN 수정 (fctcb01_sql.xml)
+- [ ] ps111 쿼리 업종코드 CASE WHEN 수정 (fctcb01_sql.xml) — 4필드 방향 확정 후
 - [ ] BZMN_BZCC NULL 처리 방침 PL 확인
-- [x] PT 공유하기 팝업 포커스 이동 설계 완료 (fcmap0100r.jsp + FCCOP0120P.jsp, 셀렉터: `.slide .modal-window`)
+- [x] PT 공유하기 팝업 포커스 이동 완료 (fcmap0100r.jsp + FCCOP0120P.jsp)
+- [x] PT 약관동의 팝업 포커스 이동 완료 (FCAGP0101P.jsp)
+- [x] PT 통신사 선택 팝업 포커스 이동 완료 (FCCOP1500P.jsp)
 - [ ] 퍼블에게 MT common.css 업데이트 요청 (flex-direction: row-reverse)
 - [ ] ti_config.yml 운영환경(dr/run) URL 추가
 - [ ] 배포리스트 엑셀 작성

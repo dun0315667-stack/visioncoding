@@ -786,6 +786,66 @@
   - fco1003(NH생명): 별도 코드 사용
 - **배운 점**: 상품코드만으로 제휴사 구분 가능. 당행=PD~, NH손보=HIRER01 등 제휴사별 코드 체계 다름
 
+### [BRIDGE] gotoFncorWrc 함수 — MT vs PT 코드 구조
+- **상태**: 분석 완료
+- **MT 파일**: fcmam0106r.jsp / **PT 파일**: fcmap0106r.jsp
+
+#### gotoFncorWrc() 공통 흐름
+1. e마케팅 사후처리 호출 (`callFireUserDefined2`)
+2. `PRC_STSC` 체크 + `reqLoanproc` → 이미 처리됐으면 상단 분기로 바로 이동
+3. 미처리 시 → `httpSender` (대출신청접수 전문 송신)
+4. success 콜백 → 버튼 상태 변경 + brpgUrl로 페이지 이동
+
+#### 상단 분기 (reqLoanproc=true, 재진입 시)
+**MT**:
+```javascript
+if("${WRS_ENT_URLNM}" != "" || brpgUrl != ""){
+    openWebPage("${WRS_ENT_URLNM}" == "" ? brpgUrl : "${WRS_ENT_URLNM}", function(ret){});
+}
+```
+→ 제휴사 구분 없이 `openWebPage` 하나로 처리
+
+**PT**:
+```javascript
+if("${map.KFTC_ORG_C}" == "011") {
+    gotoNhrc("${WRS_ENT_URLNM}" == "" ? brpgUrl : "${WRS_ENT_URLNM}");
+} else if("${map.KFTC_ORG_C}" == "440" || "${map.KFTC_ORG_C}" == "449") {
+    gotoInsurance("${WRS_ENT_URLNM}" == "" ? brpgUrl : "${WRS_ENT_URLNM}");
+} else {
+    openWebPage("${WRS_ENT_URLNM}" == "" ? brpgUrl : "${WRS_ENT_URLNM}", function(ret){});
+}
+```
+→ 제휴사별 네이티브 브릿지 분기 (011=gotoNhrc, 440/449=gotoInsurance, 기타=openWebPage)
+
+#### httpSender success 콜백 — brpgUrl 이동 분기
+**MT (svcId: FCLMM0102I, cusCtcChanC 하드코딩 "05")**:
+```javascript
+if(emptyUrlYn != "Y"){
+    if("${map.KFTC_ORG_C}" == "011") {
+        openWebPage(res.brpgUrl, function(ret){});        // 당행: 무조건 호출
+    } else if(res.brpgUrl) {
+        openWebPage(res.brpgUrl, function(ret){});        // 대외: brpgUrl 있을 때만
+    }
+}
+```
+
+**PT (svcId: FCLMP0102I, cusCtcChanC = appGbn분기 S→01/A→02)**:
+- PT는 httpSender success 내에서도 011→gotoNhrc, 440/449→gotoInsurance, else→openWebPage 분기
+- isNhOrg = ['010','011','440','449'].includes(kftcOrgC) 로 버튼 상태 분기
+
+#### MT vs PT 핵심 차이
+| 구분 | PT (앱) | MT (모바일웹) |
+|---|---|---|
+| 011 당행 | gotoNhrc() — 네이티브 앱 이동 | openWebPage() — 웹페이지 |
+| 440/449 보험 | gotoInsurance() — 네이티브 서비스 | openWebPage() — 웹페이지 |
+| 기타 대외 | openWebPage() | openWebPage() |
+| cusCtcChanC | appGbn 분기 (S→01, A→02) | 하드코딩 "05" |
+| svcId | FCLMP0102I | FCLMM0102I |
+
+#### 011 vs else if 분기 이유 (MT)
+- **011**: brpgUrl null 체크 없이 무조건 openWebPage — 당행은 MCI 안 타고 내부 세팅이라 항상 값 있음
+- **else if**: `res.brpgUrl` truthy일 때만 — MCI 응답에서 brpgUrl 안 올 수 있음
+
 ### 남은 할 일
 - [x] **[MCI] 1:N 테스트**: fco1002 rztCode=3 세팅 → 송신/수신 정상 확인 → DB 원복 완료
 - [x] **[MCI] 449(NH손보)** 결과통지 확인: 400번 00000 Success

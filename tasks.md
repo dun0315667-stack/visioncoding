@@ -692,8 +692,8 @@
 
 ## 2026-11-13
 
-### [MCI] 결과통지방법코드(RZT_NTC_METHC) 1/2/3 차이 분석 — PL 보고용
-- **상태**: 분석 완료, PL 보고 필요
+### [MCI] 결과통지방법코드(RZT_NTC_METHC) 1/2/3 차이 분석 — PL 보고 완료
+- **상태**: PL 보고 완료
 - **배경**: PL 지시 — "1:N / N:N / 1:1 세 가지 차이가 뭔지 알아와라"
 - **전체 구조**:
   - fisCodeList for문 → **2단계 분기**
@@ -732,8 +732,8 @@
   - DB에 rztCode 값이 있어도 Java 1차 분기에서 먼저 빠지면 해당 값은 dead data (당행 사례)
   - 1:N 테스트는 DB UPDATE(RZT_NTC_METHC=3)로 전체 체인(ps310→Java→ps317) 자동 전환 가능
 
-### [BRIDGE] brpgUrl 올원앱 홈 이동 이슈 — 디버깅 결과
-- **상태**: 웹 쪽 정상 확인, 네이티브 쪽 확인 필요
+### [BRIDGE] brpgUrl 올원앱 홈 이동 이슈 — 디버깅 결과 + PL 보고 완료
+- **상태**: PL 보고 완료, 우리 팀 소관 아님 확인
 - **디버깅 과정**:
   1. KFTC_ORG_C = "440" 확인 → gotoInsurance 정상 진입 (gotoNhWrc 아님)
   2. gotoInsurance 함수 내부 alert → brpgUrl 값 정상 수신
@@ -755,18 +755,43 @@
       }
   }
   ```
-- **결론**: JS 파라미터 전달은 전부 정상. goService → ABFBP0001R 네이티브 앱 로직에서 파라미터를 제휴사 URL에 매핑하는 과정 확인 필요 (웹 코드 범위 밖)
-- **PL 보고 내용**: "웹 쪽 gotoInsurance에서 svcId/prod/lnRqSqno/rq_gbn 정상 전달 확인. 네이티브(goService→ABFBP0001R) 쪽 확인 필요"
+- **추가 발견 — ABFBP0001R = 금융그룹 홈 서비스**:
+  - common.js line 1322: `/*NH농협카드 내 금융그룹 홈 버튼*/` → `$ABCOMMON.customNavigate('ABFBP0001R')`
+  - 홈 버튼이 ABFBP0001R을 params 없이 호출 → 홈으로 이동
+  - gotoInsurance도 같은 ABFBP0001R을 params 붙여서 호출 → params 유실/무시되면 홈처럼 동작
+  - `afterCloseWebview` 검색 결과: 50건 전부 호출부, **정의부 없음** → 네이티브 SDK 주입 함수
+- **JS→네이티브 체인 전체 추적 완료**:
+  ```
+  gotoInsurance(brpgUrl)
+    → appGbn="A", KFTC_ORG_C="440" → svcId='01', prod='0100'
+    → callMoAppFunctionAfterClose('goService', {ABFBP0001R, params})
+    → NH_OFWebPopup.closeWebview() + callFunctionInWebview("MW", '$NH_OPA.moApp.afterCloseWebview', opt)
+    → 🔒 네이티브 영역 (JS 추적 불가)
+  ```
+- **PL 보고 결과**:
+  - PL: "세팅을 우리가 한 게 아니잖아" → ABFBP0001R 네이티브 서비스 설정은 우리 팀 소관 아님
+  - PL: yml 파일(ti_config)에 스뱅 경로 URL만 설정하면 됨 (predev/dev/local은 TI 추가로 해결)
+  - **결론**: 올원앱 홈 이동 이슈는 네이티브 쪽 문제, 우리 팀에서 더 할 건 없음
 - **배운 점**:
   - 올원앱은 brpgUrl이 아니라 callMoAppFunctionAfterClose로 네이티브 서비스 호출 → brpgUrl에 파람 유무는 올원앱 경로와 무관
-  - 이전에 Java에서 brpgUrl에 파람 강제 추가했을 때 됐던 건 → 혹시 다른 코드 경로(스뱅 else, openWebPage)를 탔을 가능성
+  - ABFBP0001R이 홈 서비스ID라는 것은 common.js의 `.home-link-move` 클릭 핸들러에서 확인 가능
+  - `afterCloseWebview`는 네이티브 SDK가 웹뷰에 주입하는 함수 — JS 소스에 정의부 없으면 네이티브 영역
+  - callMoAppFunctionAfterClose(closeWebview 후 호출) vs callMoAppFunction(바로 호출) — 다른 함수이므로 동작 차이 가능
+
+### [MCI] 상품 테이블 구조 확인
+- **상태**: 확인 완료
+- **TB_EF_FC_CH_WRSAMN** 조회 결과:
+  - fco0001(당행): PD001(올원직장인대출), PD002(NH직장인대출V), PD003(NH첫시작연대출) 등
+  - fco1002(NH손보): HIRER01(보험계약대출) — 상품코드 체계가 당행(PD~)과 다름
+  - fco1003(NH생명): 별도 코드 사용
+- **배운 점**: 상품코드만으로 제휴사 구분 가능. 당행=PD~, NH손보=HIRER01 등 제휴사별 코드 체계 다름
 
 ### 남은 할 일
 - [x] **[MCI] 1:N 테스트**: fco1002 rztCode=3 세팅 → 송신/수신 정상 확인 → DB 원복 완료
 - [x] **[MCI] 449(NH손보)** 결과통지 확인: 400번 00000 Success
-- [x] **[BRIDGE] brpgUrl 디버깅**: 웹 쪽 정상 확인 (파라미터 전부 값 있음)
-- [ ] **[BRIDGE] PL 보고**: 네이티브(goService→ABFBP0001R) 쪽 확인 필요
-- [ ] **[MCI] PL 보고**: N:N/1:1/1:N 코드 분석 + 1:N 테스트 결과
+- [x] **[BRIDGE] brpgUrl 디버깅**: 웹 쪽 정상 확인 + ABFBP0001R = 홈 서비스 발견
+- [x] **[BRIDGE] PL 보고**: 네이티브 쪽 우리 소관 아님 확인, 스뱅 경로는 yml 설정으로 해결
+- [x] **[MCI] PL 보고**: N:N/1:1/1:N 코드 분석 + 1:N 테스트 결과 보고 완료
 - [ ] 면적 선택 팝업 (FCMIP2201P) JSP 코드에 tabindex + focus 적용
 - [ ] ps111 쿼리 업종코드 CASE WHEN 수정 (fctcb01_sql.xml) — 4필드 방향 확정 후
 - [ ] fcjim1400r.jsp PT: 차량번호 input aria-label 추가

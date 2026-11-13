@@ -716,16 +716,57 @@
   - rztCode=3 (1:N): **0건** — 검증서버에 해당 제휴사 없음
 - **440(NH생명) 실제 경로**: tgrCode=3 → fisCode=440 → 대외계 else → rztCode=1(N:N) → ps315
 - **당행(011) 참고**: rztCode=2이지만 1차 분기에서 당행 경로로 빠져서 rztCode 분기 안 탐
-- **PL 보고 필요**: "검증서버에 rztCode=3 제휴사 없음. 1:N 런타임 테스트 필요하면 데이터 세팅 필요"
+- **1:N 테스트 완료**: fco1002(449 NH손보) RZT_NTC_METHC=3으로 DB UPDATE 후 테스트
+  - 송신(100번): 정상 (ps317 경로)
+  - 접수확인(200번): 00000 정상
+  - 결과통지(400번): 00000 Success — FCTCP1200I_OUT 정상 수신
+  - DB 원복 완료 (RZT_NTC_METHC=1로 복원)
+- **N:N 양쪽 제휴사 확인 완료**:
+  - fco1003 (440 NH생명): 송신/접수/결과통지 전부 정상
+  - fco1002 (449 NH손보): 송신/접수/결과통지 전부 정상
+- **N:N/1:1/1:N 명칭 의미**: 앞=요청(가심사요청 IN) 건수, 뒤=결과통지(역거래 OUT) 건수
 - **배운 점**:
   - fisCodeList for문은 제휴사 루프이고, rztCode 분기는 대외계(else) 안에서만 의미 있음
   - 당행(011)은 rztCode 값과 무관하게 1차 분기에서 전용 경로를 탐
   - ps310의 CASE WHEN은 분류가 아니라 1:N용 데이터 준비 (상품코드를 fisCodeList에 미리 셋팅)
+  - DB에 rztCode 값이 있어도 Java 1차 분기에서 먼저 빠지면 해당 값은 dead data (당행 사례)
+  - 1:N 테스트는 DB UPDATE(RZT_NTC_METHC=3)로 전체 체인(ps310→Java→ps317) 자동 전환 가능
+
+### [BRIDGE] brpgUrl 올원앱 홈 이동 이슈 — 디버깅 결과
+- **상태**: 웹 쪽 정상 확인, 네이티브 쪽 확인 필요
+- **디버깅 과정**:
+  1. KFTC_ORG_C = "440" 확인 → gotoInsurance 정상 진입 (gotoNhWrc 아님)
+  2. gotoInsurance 함수 내부 alert → brpgUrl 값 정상 수신
+  3. svcId, prod, lnRqSqno, rq_gbn 전부 값 있음 (alert 확인)
+- **발견**: 올원앱(appGbn="A") 경로에서 **brpgUrl을 사용하지 않음**
+  - `callMoAppFunctionAfterClose('goService', {targetServiceId: 'ABFBP0001R', svcId, prod, lnRqSqno, rq_gbn: '02'})` 호출
+  - brpgUrl은 else(스뱅) 경로에서만 `openWebPage(brpgUrl, ...)` 로 사용
+- **gotoInsurance 함수 구조** (fcmap0106r.jsp):
+  ```
+  function gotoInsurance(brpgUrl) {
+      var lnRqSqno = '${lnRqSqno}';
+      if(appGbn == "A") {  // 올원앱
+          KFTC_ORG_C 440 → svcId='01', prod='0100'
+          KFTC_ORG_C 449 → svcId='02', prod='1000'
+          callMoAppFunctionAfterClose('goService', {ABFBP0001R, svcId, prod, lnRqSqno, rq_gbn:'02'})
+          // brpgUrl 안 씀
+      } else {  // 스뱅
+          openWebPage(brpgUrl, ...)  // brpgUrl 직접 사용
+      }
+  }
+  ```
+- **결론**: JS 파라미터 전달은 전부 정상. goService → ABFBP0001R 네이티브 앱 로직에서 파라미터를 제휴사 URL에 매핑하는 과정 확인 필요 (웹 코드 범위 밖)
+- **PL 보고 내용**: "웹 쪽 gotoInsurance에서 svcId/prod/lnRqSqno/rq_gbn 정상 전달 확인. 네이티브(goService→ABFBP0001R) 쪽 확인 필요"
+- **배운 점**:
+  - 올원앱은 brpgUrl이 아니라 callMoAppFunctionAfterClose로 네이티브 서비스 호출 → brpgUrl에 파람 유무는 올원앱 경로와 무관
+  - 이전에 Java에서 brpgUrl에 파람 강제 추가했을 때 됐던 건 → 혹시 다른 코드 경로(스뱅 else, openWebPage)를 탔을 가능성
 
 ### 남은 할 일
-- [ ] **[MCI] PL 보고**: rztCode=3(1:N) 검증서버 데이터 없음 → 테스트 데이터 세팅 필요한지 확인
-- [ ] **[긴급] 올원앱 brpgUrl 홈 이동 이슈** — gotoInsurance 함수 디버깅 + PL 확인
-- [ ] **[MCI] 449(NH손보)** 결과통지 확인 + 로그사이트/관리자페이지 캡처
+- [x] **[MCI] 1:N 테스트**: fco1002 rztCode=3 세팅 → 송신/수신 정상 확인 → DB 원복 완료
+- [x] **[MCI] 449(NH손보)** 결과통지 확인: 400번 00000 Success
+- [x] **[BRIDGE] brpgUrl 디버깅**: 웹 쪽 정상 확인 (파라미터 전부 값 있음)
+- [ ] **[BRIDGE] PL 보고**: 네이티브(goService→ABFBP0001R) 쪽 확인 필요
+- [ ] **[MCI] PL 보고**: N:N/1:1/1:N 코드 분석 + 1:N 테스트 결과
 - [ ] 면적 선택 팝업 (FCMIP2201P) JSP 코드에 tabindex + focus 적용
 - [ ] ps111 쿼리 업종코드 CASE WHEN 수정 (fctcb01_sql.xml) — 4필드 방향 확정 후
 - [ ] fcjim1400r.jsp PT: 차량번호 input aria-label 추가

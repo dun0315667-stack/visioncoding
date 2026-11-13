@@ -688,6 +688,54 @@
 - [ ] 스크래핑 연결 후 MCI 4필드 실데이터 재테스트
 - [ ] 하드코딩 코드 전부 원복 (커밋 전)
 
+---
+
+## 2026-11-13
+
+### [MCI] 결과통지방법코드(RZT_NTC_METHC) 1/2/3 차이 분석 — PL 보고용
+- **상태**: 분석 완료, PL 보고 필요
+- **배경**: PL 지시 — "1:N / N:N / 1:1 세 가지 차이가 뭔지 알아와라"
+- **전체 구조**:
+  - fisCodeList for문 → **2단계 분기**
+  - 1차 분기: tgrCode(전문유형코드) + fisCode(금융기관코드)
+    - tgrCode="3" & fisCode="010" → 카드론 (fctcb2100tS)
+    - tgrCode="3" & fisCode="011" → 당행 (fctcb1100tS)
+    - else → **대외계 MCI** ← 여기서만 rztCode 분기 진입
+  - 2차 분기: rztCode(결과통지방법코드) — 대외계에서만 적용
+    - 1 → N:N (ps315 = getApiDataTupwList)
+    - 2 → 1:1 (ps316 = getApiDataTupwList2)
+    - 3 → 1:N (ps317 = getApiDataTupwList3)
+- **핵심 차이: LoReqtNo(한도조회일련번호) 채번 방식**:
+  - N:N (rzt=1, ps315): 시퀀스 매번 새로 → 상품마다 독립 일련번호
+  - 1:1 (rzt=2, ps316): #{inqNo} 고정값 → 전체가 같은 일련번호 공유
+  - 1:N (rzt=3, ps317): FROM DUAL + Java 파라미터만 사용 (DB 테이블 안 탐)
+- **ps310 CASE WHEN RZT_NTC_METHC='3'**: 분류가 아니라 데이터 준비. 1:N일 때만 fisCodeList에 상품코드(AFLCN_WRS_C) 미리 담아둠
+- **검증서버 DB 조회 결과** (ps310 기준 19건):
+  - rztCode=1 (N:N): 다수 — fco1003(440 NH생명), fco1002(449 NH손보) 등
+  - rztCode=2 (1:1): 일부 — fco0006, fco0005, fco0001(011 당행) 등
+  - rztCode=3 (1:N): **0건** — 검증서버에 해당 제휴사 없음
+- **440(NH생명) 실제 경로**: tgrCode=3 → fisCode=440 → 대외계 else → rztCode=1(N:N) → ps315
+- **당행(011) 참고**: rztCode=2이지만 1차 분기에서 당행 경로로 빠져서 rztCode 분기 안 탐
+- **PL 보고 필요**: "검증서버에 rztCode=3 제휴사 없음. 1:N 런타임 테스트 필요하면 데이터 세팅 필요"
+- **배운 점**:
+  - fisCodeList for문은 제휴사 루프이고, rztCode 분기는 대외계(else) 안에서만 의미 있음
+  - 당행(011)은 rztCode 값과 무관하게 1차 분기에서 전용 경로를 탐
+  - ps310의 CASE WHEN은 분류가 아니라 1:N용 데이터 준비 (상품코드를 fisCodeList에 미리 셋팅)
+
+### 남은 할 일
+- [ ] **[MCI] PL 보고**: rztCode=3(1:N) 검증서버 데이터 없음 → 테스트 데이터 세팅 필요한지 확인
+- [ ] **[긴급] 올원앱 brpgUrl 홈 이동 이슈** — gotoInsurance 함수 디버깅 + PL 확인
+- [ ] **[MCI] 449(NH손보)** 결과통지 확인 + 로그사이트/관리자페이지 캡처
+- [ ] 면적 선택 팝업 (FCMIP2201P) JSP 코드에 tabindex + focus 적용
+- [ ] ps111 쿼리 업종코드 CASE WHEN 수정 (fctcb01_sql.xml) — 4필드 방향 확정 후
+- [ ] fcjim1400r.jsp PT: 차량번호 input aria-label 추가
+- [ ] 퍼블에게 MT common.css 업데이트 요청 (flex-direction: row-reverse)
+- [ ] ti_config.yml 운영환경(dr/run) URL 추가
+- [ ] 배포리스트 엑셀 작성
+- [ ] MT 실기기 테스트
+- [ ] 스크래핑 연결 후 MCI 4필드 실데이터 재테스트
+- [ ] 하드코딩 코드 전부 원복 (커밋 전)
+
 <!-- 템플릿
 ### [카테고리] 제목
 - **상태**: 해결 / 미해결 / 보류

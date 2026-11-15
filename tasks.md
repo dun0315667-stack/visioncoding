@@ -846,6 +846,26 @@ if(emptyUrlYn != "Y"){
 - **011**: brpgUrl null 체크 없이 무조건 openWebPage — 당행은 MCI 안 타고 내부 세팅이라 항상 값 있음
 - **else if**: `res.brpgUrl` truthy일 때만 — MCI 응답에서 brpgUrl 안 올 수 있음
 
+### [LOCAL] MT 로컬 기동 시 404 에러 — 해결
+- **상태**: 해결
+- **증상**: 로컬 MT(8700) 홈 진입 시 콘솔에 `404 Not Found from POST http://127.0.0.1:8110/FCMAP0100R/getEvtListData`
+- **원인**: MT(8700) → CM(8110)으로 `/FCMAP0100R/getEvtListData` 호출했으나 CM에 해당 엔드포인트 없음. CircuitBreaker FailedCalls: 6
+- **해결**: CM 서버 관련 문제 — 사용자가 자체 해결
+
+### [접근성] renderDivFormAccordionDom 코드 리뷰
+- **상태**: 리뷰 완료, 수정 대기
+- **파일**: 약관 동의 관련 JS (아코디언 DOM 렌더링 함수)
+- **발견된 오류**:
+  1. **(심각) 1depth 아코디언 `<button>` 태그 미완성**:
+     - `>` 누락 — 태그 닫히지 않음
+     - `onClick` 핸들러 없음 — 토글 불가능
+     - `<span class="blind">펼치기</span>` content 없음
+     - `</button>` 닫는 태그 없음
+     - else 분기 버튼은 정상 (onClick + 펼치기 텍스트 + </button> 있음)
+  2. **(경미) else 분기 `aria-describedby` trailing space**:
+     - `' "'` → `"agChk_123 "` (끝에 불필요한 공백)
+     - `' "'`를 `'"'`로 수정 필요
+
 ### 남은 할 일
 - [x] **[MCI] 1:N 테스트**: fco1002 rztCode=3 세팅 → 송신/수신 정상 확인 → DB 원복 완료
 - [x] **[MCI] 449(NH손보)** 결과통지 확인: 400번 00000 Success

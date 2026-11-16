@@ -882,6 +882,43 @@ if(emptyUrlYn != "Y"){
 - [ ] 스크래핑 연결 후 MCI 4필드 실데이터 재테스트
 - [ ] 하드코딩 코드 전부 원복 (커밋 전)
 
+---
+
+## 2026-11-16
+
+### [학습] 데이터 흐름 추적 1 — LN_RQ_JOB_C → jonCls
+- **상태**: 완료
+- **목적**: jonCls가 어디서 오는지 전체 흐름 추적 (폐쇄망 STS 실습)
+- **흐름**:
+  ```
+  사용자 직업정보 입력 화면
+    → fcjib0500sC → fcjib0500sS.updateJobInfo() → fcjib0500D
+    → fcji_tb_ef_fc_cm_cmpr_rq_pu001_ea (UPDATE)
+      UPDATE TB_EF_FC_CM_CMPR_RQAMN SET LN_RQ_JOB_C = #{ln_rq_job_c}
+      (여기서 값 최초 세팅. INSERT 시점에는 비어있음)
+
+    → fccob4000D.getLnRqJobC() SELECT로 읽어옴
+    → fccob4000sS.getAmData()에서 tempMap.put("lnRqJobC", resultMap.get("LN_RQ_JOB_C"))
+    → ps311 SQL: CMPR.LN_RQ_JOB_C AS "JonCls" (SQL alias로 변환)
+    → TI에서 jonCls="5" 분기 → 사업자 MCI 전문 호출
+  ```
+- **값 의미**: "1"=직장인, "2"=공무원, "5"=사업자 (fccob4000sS switch문)
+- **핵심 발견**: Java 변환이 아니라 SQL alias(`AS "JonCls"`)로 이름이 바뀜
+
+### [학습] 데이터 흐름 추적 2 — SCRPG_SUC_YN
+- **상태**: 완료
+- **목적**: 스크래핑 성공여부가 어디서 세팅되고 어디서 읽히는지 추적
+- **쓰는 곳 (UPDATE)**:
+  - 파일: fccob02_sql.xml
+  - SQL ID: `fccob_tb_ef_fc_cm_cmpr_rq_pu001_ea`
+  - `UPDATE TB_EF_FC_CM_CMPR_RQAMN SET SCRPG_SUC_YN = #{SCRPG_SUC_YN}, PRG_STP_DSC = '06'`
+  - 이 UPDATE는 **범용 쿼리** — `<if test>` 동적SQL로 호출자마다 다른 컬럼 세팅
+  - 호출자: 건강보험스크래핑(fccrbNHISScrapingService), 홈택스스크래핑, 직업/자산정보 저장 등
+- **읽는 곳 (SELECT)**:
+  - ps311 SQL: `NVL(CMPR.SCRPG_SUC_YN, 'N') as "ScrpInfoYN"`
+  - TI 가심사요청 전송 시 스크래핑 완료 여부 판단용
+- **배운 점**: 하나의 UPDATE를 여러 서비스가 공유하는 구조. 파라미터에 뭘 넣느냐로 동작이 달라짐
+
 <!-- 템플릿
 ### [카테고리] 제목
 - **상태**: 해결 / 미해결 / 보류

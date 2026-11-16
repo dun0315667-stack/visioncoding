@@ -919,6 +919,41 @@ if(emptyUrlYn != "Y"){
   - TI 가심사요청 전송 시 스크래핑 완료 여부 판단용
 - **배운 점**: 하나의 UPDATE를 여러 서비스가 공유하는 구조. 파라미터에 뭘 넣느냐로 동작이 달라짐
 
+### [접근성] 퍼블 요청 3건 — 작업 진행중
+- **상태**: 진행중
+
+#### 1. 약관 상세보기 title 수정
+- **파일**: fcagm0100r.jsp (line 322~323)
+- **변경**: `setChecked` 함수 안 `.attr('title', ...)` 삼항연산자 → `'약관 상세보기'` 하나로 통일
+- **기존**: `isOn ? '상세 동의 팝업 열기 선택됨' : '상세 동의 팝업 열기 선택안됨'`
+- **변경후**: `'약관 상세보기'`
+- **상태**: 수정 완료, 테스트 필요
+
+#### 2. 페이지 타이틀 — 페이지별 상세명 + NH금융상품비교
+- **공통 템플릿**: template-main.jsp (line 28)
+  - `<title><c:if test="${not empty RESULT_MAP.pageTitle}">${RESULT_MAP.pageTitle} </c:if>NH 금융상품비교</title>`
+- **Tiles 설정**: nh-mobile-fc-definition.xml — 와일드카드 매핑(`/fc/*/*.jsp`)이라 페이지별 definition 없음
+- **방법 1 (전용 컨트롤러 있는 페이지)**: `resultMap.getOut().put("pageTitle", "페이지명")`
+  - 예: fcmam1100sC → 적용 성공 확인됨
+  - fclmm0100sC (비교조회결과) → resultMap 받은 직후 한 줄 추가
+- **방법 2 (defaultPageViewController / denyMap 컨트롤러)**: JSP에서 `document.title` JS로 세팅
+  - denyMap 리턴하는 컨트롤러는 RESULT_MAP 전달 안 됨 (fcwsm0700sC, fccom2001sC 확인)
+  - defaultPageViewController인 페이지도 전용 컨트롤러 없어서 JS 방식
+  - `<script>document.title = "페이지명 NH금융상품비교";</script>` — `<c:if>` 바깥에 넣을 것
+- **주의**: template-main.jsp에서 이미 "NH금융상품비교" 붙이므로, 컨트롤러 방식은 pageTitle에 "NH금융상품비교" 안 넣기. JS 방식은 전체 title을 직접 세팅하므로 붙여야 함
+- **상태**: 일부 페이지 적용 완료, 나머지 페이지 + 테스트 필요
+
+#### 3. 레이아웃 팝업 — slide 대신 modal-window
+- **상태**: 미착수
+- **내용**: 퍼블이 slide 팝업을 modal-window로 변경 요청
+
+### [내일 체크리스트] 11/17
+- [ ] 약관 상세보기 title 수정 — 로컬/dev 테스트
+- [ ] 페이지 타이틀 — 적용한 페이지들 F12에서 `<title>` 확인
+- [ ] 페이지 타이틀 — 나머지 대상 페이지 작업 (퍼블한테 전체 목록 확인)
+- [ ] 레이아웃 팝업 slide→modal-window — 퍼블한테 대상 팝업 확인 후 작업
+- [ ] 퍼블한테 각 페이지 정확한 타이틀명 확인받기
+
 <!-- 템플릿
 ### [카테고리] 제목
 - **상태**: 해결 / 미해결 / 보류

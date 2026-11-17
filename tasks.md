@@ -954,6 +954,95 @@ if(emptyUrlYn != "Y"){
 - [ ] 레이아웃 팝업 slide→modal-window — 퍼블한테 대상 팝업 확인 후 작업
 - [ ] 퍼블한테 각 페이지 정확한 타이틀명 확인받기
 
+---
+
+## 2026-11-17
+
+### [카카오 알림톡] MT용 카카오 알림톡 추가 — 코드 분기 작성중
+- **상태**: 진행중
+- **배경**: 동료(PC 고장)한테 넘겨받은 작업. MT 전용 카카오 알림톡 추가
+- **완료 사항**:
+  - 관리자페이지 상세코드 4건 등록 (01=스뱅, 02=올뱅, 03=비교금융, 04=모바일웹)
+  - 쿼리(ps003) UNION ALL 4개 ORD 추가
+  - 타이틀/본문 세팅 완료
+- **코드 분기 로직** (fccob1030sS.java):
+  - cusCtcChanC = dataMap.getIn().getValue("cusCtcChanC", "") — 고객접촉채널코드
+  - 비회원("12") 분기:
+    - MT("05") → 4번 ORD만 발송
+    - PT(그 외) → 1번 ORD만 발송
+  - 기존고객 → 2번, 3번 ORD만 발송
+  - **주의**: DB에 "05"로 저장됨 (zero-padding). `"5".equals("05")`는 false → 반드시 `"05"` 사용
+- **남은 것**: 코드 적용 후 dev 배포 + 테스트
+
+### [퍼블 요청] 약관 팝업 after→body 변경 + 접근성 포커스
+- **상태**: 완료
+- **파일**: fcagm0103p.jsp (약관동의 팝업, MT)
+- **변경 내용**:
+  1. `$('#signTermsArea').after(html)` → `$('#termsModalBody').html(html)` (id 기반 셀렉터)
+  2. `<div class="modal-body">` → `<div class="modal-body" id="termsModalBody" tabindex="-1">` (id+tabindex 추가)
+  3. success 콜백에 `common_closeInitLodingBar()` + `setTimeout(300ms)` + `$('#termsModalBody').focus()` 추가
+- **이유**: `.modal-body` 클래스가 페이지에 2개 존재 → class 셀렉터 대신 id 셀렉터 필요
+- **after vs html 차이**: `.after()` = 형제로 바깥에 삽입, `.html()` = 자식으로 내부 교체
+
+### [퍼블 요청] 페이지별 타이틀 추가 — 일부 적용
+- **상태**: 진행중
+- **방법 1 (컨트롤러 있는 페이지)**: `resultMap.getOut().put("pageTitle", "페이지명")` → template-main.jsp `<title>` 반영
+- **방법 2 (denyMap/기본 컨트롤러 페이지)**: JSP에서 `<script>document.title = "페이지명 NH금융상품비교";</script>`
+- **적용한 페이지**: fcmam1100sC 등 일부 완료
+- **남은 것**: 나머지 페이지 + 퍼블한테 전체 목록/정확한 타이틀명 확인
+
+### [퍼블 요청] 레이아웃 팝업 slide→modal-window — 셀렉터 수정 필요
+- **상태**: 진행중
+- **내용**: 퍼블이 slide 팝업을 modal-window로 변경 → 기존 `.slide .modal-window` JS 셀렉터가 null 리턴
+- **수정 패턴**: `.slide .modal-window` → `#팝업ID .modal-window`
+- **적용 완료**: 공유하기 팝업 — `#FCCOP0120P .modal-window` (fcmap0100r.jsp)
+- **남은 것**: 다른 팝업도 동일 패턴 점검 필요
+
+### [접근성] 공유하기 팝업 포커스 이동 — 셀렉터 수정
+- **상태**: 완료
+- **파일**: fcmap0100r.jsp (share 버튼 클릭 함수)
+- **변경**: `.slide .modal-window` → `#FCCOP0120P .modal-window`
+- **패턴**:
+  ```javascript
+  fcPop.modalOpen('FCCOP0120P', {}, function() {
+      window.setTimeout(function(){
+          var el = document.querySelector('#FCCOP0120P .modal-window');
+          if(el) { el.focus(); }
+      }, 100);
+  }, this);
+  ```
+- **확인**: `querySelectorAll('.modal-window').length` = 2개 → id 기반 셀렉터 필수
+
+### [Git] Merge conflict 해결 2건
+- **상태**: 완료
+1. **fccrm0400sC.java (휴대폰 본인인증 컨트롤러)**:
+   - HEAD: 수동 `SpringContext.getProperty(...)` + pageTitle
+   - Incoming: `EnvUtil.isCbt()` (더 깔끔)
+   - **해결**: pageTitle 유지(내 작업) + EnvUtil.isCbt() 채택 + SpringContext 라인 제거
+2. **fcagm0103p.jsp (약관동의 팝업)**:
+   - HEAD: `$('.modal-body').html(html)` (내 변경)
+   - Incoming: `common_closeInitLodingBar()` + `$('#signTermsArea').after(html)`
+   - **해결**: `$('#termsModalBody').html(html)` 유지 + `common_closeInitLodingBar()` 추가 (로딩바 짝 맞추기)
+- **SourceTree 주의**: "내것으로 변경" = HEAD만 유지 (상대 코드 전부 삭제). 충돌 부분 수동 편집 후 "충돌 해결됨으로 표시" → 스테이지 → 커밋
+
+### [내일 체크리스트] 11/18
+- [ ] **[카카오 알림톡]** cusCtcChanC 분기 코드 적용 → dev 배포 → 테스트
+  - "05" zero-padding 확인, 비회원/기존고객 분기 동작 검증
+- [ ] **[퍼블 요청]** 페이지 타이틀 — 나머지 대상 페이지 작업
+  - 퍼블한테 전체 목록 + 정확한 타이틀명 확인받기
+  - 적용한 페이지 F12에서 `<title>` 확인
+- [ ] **[퍼블 요청]** 레이아웃 팝업 slide→modal-window
+  - 퍼블한테 대상 팝업 목록 확인
+  - `.slide .modal-window` 셀렉터 사용하는 JS 전체 검색 → `#팝업ID .modal-window`로 수정
+- [ ] **[퍼블 추가]** 스크래핑 중 문구 수정 + 휴대폰 인증 화면 타이틀 수정 (급하지 않음)
+- [ ] **[접근성]** 전체 팝업 포커스 이동 검토
+  - fcPop.modalOpen 공통 함수에 focus 처리 여부 확인
+  - 없으면 개별 팝업마다 setTimeout+focus 패턴 적용
+- [ ] **[기존]** 면적 선택 팝업 (FCMIP2201P) tabindex + focus 적용
+- [ ] **[기존]** 배포리스트 엑셀 작성
+- [ ] **[기존]** MT 실기기 테스트
+- [ ] **[기존]** 하드코딩 코드 전부 원복 (커밋 전)
+
 <!-- 템플릿
 ### [카테고리] 제목
 - **상태**: 해결 / 미해결 / 보류

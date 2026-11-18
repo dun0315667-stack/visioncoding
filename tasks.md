@@ -1069,7 +1069,32 @@ if(emptyUrlYn != "Y"){
 - **마스킹 유틸 발견**: `NHBFormatUtil.maskWithPattern(String targetStr, String pattern)` — 프로프레임웍 공통 유틸 (`nhbank/ef/fc/commons/util/NHBFormatUtil.java`)
   - `?` = 원본 글자 그대로, `*` = 별표 마스킹, 그 외 문자 = 그대로 출력
   - 주민번호 예: `maskWithPattern("8501151234567", "??????-?******")` → `850115-1******`
-- **조사 필요**: FCCRM0600R, FCCRM0614P에서 주민번호가 응답에 담기는 위치 찾기 → 그 위치에서 maskWithPattern 호출 추가
+
+##### 052 코드 추적 결과
+
+**전체 흐름**:
+```
+[세션] custInfo.getRLNO() (평문 주민번호)
+  ↓
+[Controller] fccrm0600sC.java line 76: rlno = custInfo.getRLNO()
+  ↓ (프레임워크 자동 바인딩 추정)
+[JSP] fccerCertCommonScrap.jsp line 87: params.RLNO = "${rlno}"  ← 평문 노출 지점
+  ↓
+[JS] httpSender로 FCCRM0611R 서비스 호출 (params에 평문 포함)
+  ↓
+[Service] fccrb0604sS.java line 280: PetraCipherUtil.encrypt(RLNO) → 암호화
+  ↓
+[외부] 건보/국세청 API로 암호화된 값 전송
+```
+
+**취약점 지점**: JSP에서 `${rlno}`로 평문이 브라우저에 도달 → Network/Console 탭에서 확인 가능
+**서버는 이미 암호화해서 사용 중**: fccrb0604sS에서 PETRA 암호화 후 외부 전송
+**문제**: 서버가 세션에 주민번호를 갖고 있으면서도 클라이언트를 거쳐서 받는 구조
+
+**조치 방향**:
+  - JSP에 `${rlno}` 평문을 내려보내지 않고, 서버(fccrb0604sS)에서 세션으로 직접 가져와서 처리
+  - 또는 JSP에 내려줘야 한다면 NHBFormatUtil.maskWithPattern으로 마스킹 후 전달
+  - 단, 마스킹하면 건보/국세청 인증에 실제 주민번호가 필요하므로 → 서버 직접 처리 방식이 근본 해결
 - **상태**: 연구중 (방식 보고 후 개발)
 
 **연구 순서**: 052(마스킹, 범위 좁음) → 021(rate limit) → 019(세션 검증, 가장 복잡)

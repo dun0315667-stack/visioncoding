@@ -792,3 +792,86 @@ devOs 출처:
 openWebPage vs fg.sf.exec 차이:
 
 ```
+
+---
+
+## 세션 8: 접근성 — 팝업 포커스 이동 패턴
+
+### 수정 대상 2가지
+1. 팝업 JSP의 `.modal-window` div에 `tabindex="-1"` 추가
+2. focus 코드 추가 (위치는 케이스에 따라 다름)
+
+### focus 코드 넣는 위치 판단
+
+| 케이스 | focus 넣는 곳 | 이유 |
+|---|---|---|
+| 팝업 열리면 콘텐츠 바로 있음 | 호출 JSP의 `modalOpen` 콜백 | 콜백 시점에 DOM 준비됨 |
+| 팝업 안에서 ajax로 콘텐츠 로드 | 팝업 JSP의 ajax success 콜백 | 콘텐츠 로드 후에야 focus 의미 있음 |
+
+- "호출 JSP" = 팝업을 여는 버튼/함수가 있는 파일 (예: fcmap0100r.jsp → 공유하기 팝업 호출)
+- "팝업 JSP" = 열리는 팝업 파일 자체 (예: fccop0120p.jsp)
+
+### 코드 패턴
+
+**패턴 A — 호출 쪽 (modalOpen 콜백):**
+```javascript
+fcPop.modalOpen('팝업ID', {}, function() {
+    window.setTimeout(function(){
+        var el = document.querySelector('#팝업ID .modal-window');
+        if(el) { el.focus(); }
+    }, 100);
+}, this);
+```
+
+**패턴 B — 팝업 내부 (ajax success):**
+```javascript
+success: function(html) {
+    $('#타겟ID').html(html);
+    common_closeInitLodingBar();
+    setTimeout(function() {
+        $('#타겟ID').focus();
+    }, 300);
+}
+```
+
+### 셀렉터 규칙
+- `.slide .modal-window` 쓰면 안 됨 → 퍼블이 HTML 구조 바꾸면 null 리턴
+- `#팝업ID .modal-window` 사용 → ID 기반이라 구조 변경에 안전
+- `.modal-window`만 쓰면 페이지에 여러 개 있을 수 있음 → 반드시 부모 ID로 특정
+
+### 콘솔 확인 방법 (팝업 연 후 F12)
+```javascript
+// 1. 포커스 위치 확인
+document.activeElement
+// → .modal-window 나오면 성공, <body>나 버튼이면 실패
+
+// 2. tabindex 있는지
+document.querySelector('#팝업ID .modal-window').getAttribute('tabindex')
+// → "-1" 나오면 OK, null이면 미적용
+
+// 3. 셀렉터가 맞는지
+document.querySelector('#팝업ID .modal-window')
+// → 요소 나오면 OK, null이면 ID 오타 또는 클래스 없음
+
+// 4. .modal-window 몇 개인지 (셀렉터 고유성 검증)
+document.querySelectorAll('.modal-window').length
+// → 2개 이상이면 반드시 #팝업ID 붙여서 특정
+```
+
+### 적용 완료 목록
+| 팝업 | 팝업 JSP | 호출 JSP | 패턴 | 날짜 |
+|---|---|---|---|---|
+| 공유하기 (PT) | FCCOP0120P.jsp | fcmap0100r.jsp | A | 11/11 |
+| 약관동의 (PT) | FCAGP0101P.jsp | 약관 화면 | A | 11/12 |
+| 통신사선택 (PT) | FCCOP1500P.jsp | — | A (initPage) | 11/12 |
+| 공유하기 (MT) | fccop0120p.jsp | fcmap0100r.jsp | A | 11/17 |
+| 약관상세 (MT) | fcagm0103p.jsp | (자체 ajax) | B | 11/17 |
+
+### 세션 8 메모
+```
+(접근성 PDF 보면서 추가 대상 팝업 여기에 적기)
+팝업명 | 팝업 JSP | 호출 JSP | 패턴A/B | 완료여부
+-------|----------|----------|---------|--------
+
+
+```

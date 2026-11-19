@@ -1058,9 +1058,34 @@ if(emptyUrlYn != "Y"){
 #### WEB-SER-021 (무제한 요청 차단) / FCCRM0610R
 - **현상**: 카카오 인증 선택 후 휴대폰 정보 입력 및 약관동의 진행 → 카카오 인증 요청 값을 Intruder로 이동 및 30회 반복 요청 세팅(1초 1회) → 반복요청시도 가능 → 카카오 인증요청이 30회 전송됨
 - **근본 원인**: 카카오 인증 요청 API에 횟수/시간 제한 로직 없음
-- **개선 방향**: 세션 기반 카운터(세션에 요청 횟수 + 최초 요청 시간 저장 → N분 내 M회 초과 시 차단) 또는 DB 기반 이력 저장 후 차단. 프레임워크 공통 rate limit 모듈 유무 확인 필요
-- **조사 필요**: FCCRM0610R에서 카카오 인증 요청 호출 위치 찾기. 프로프레임웍에 rate limit 공통 모듈 있는지 확인
-- **상태**: 연구중 (방식 보고 후 개발)
+- **개선 방향**: 세션 기반 카운터(세션에 요청 횟수 + 최초 요청 시간 저장 → N분 내 M회 초과 시 차단) 또는 DB 기반 이력 저장 후 차단
+- **담당**: 다른 팀원이 개발 중
+- **상태**: 코드 추적 완료 (흐름 파악)
+
+##### 021 코드 추적 결과
+
+**전체 흐름**:
+```
+[JSP] fccrm0614p.jsp — 카카오 등 인증 버튼 클릭
+  → oneClickBind() 실행
+  → fcPop.modalOpen('FCAGM0102P') — 약관동의 팝업
+  → goAuth() — 약관 체크 확인 후 팝업 닫기 (인증 요청 아님)
+  → 콜백에서 param 세팅 (cusno, cmprRqSqno 등 EL 표현식)
+  ↓
+[JS] httpSender({ svcId: 'FCJIM2500I', param }) — 서버 첫 요청
+  ↓ 성공 시
+[JS] simpleAuthLoginGbnServerScrap(atoaTpcNm) — FCCRM0610R 호출
+  ↓
+[Controller] fccrm0605sC.doSimpleCertScrapping(FrontData)
+  → inq_dsc = "1" 분기 → fccrm0605sS.getLoginRequest(dataMap)
+  ↓
+[Service] fccrb0604sS.getLoginRequest() — 건보공단 간편인증 로그인 실행
+  → PETRA 암호화 후 외부 API 전송
+```
+
+**rate limit 적용 위치**: `doSimpleCertScrapping` 메서드 내 `inq_dsc="1"` 분기, `getLoginRequest` 호출 전
+- 프론트의 `isRequesting` 플래그는 Burp Suite Intruder로 우회 가능 → 서버 쪽에서 차단 필수
+- 로그아웃 등 다른 분기는 제한 불필요 → `inq_dsc="1"` 안에만 적용
 
 #### NH-WEB-052 (중요정보 마스킹 처리 여부) / FCCRM0600R, FCCRM0614P
 - **현상**: 인증서 선택 화면 진입 시 응답 값에 실명정보 콘솔로 노출 → 인증서 선택 후 다음 단계 진입시에도 같은 노출
@@ -1095,9 +1120,14 @@ if(emptyUrlYn != "Y"){
   - JSP에 `${rlno}` 평문을 내려보내지 않고, 서버(fccrb0604sS)에서 세션으로 직접 가져와서 처리
   - 또는 JSP에 내려줘야 한다면 NHBFormatUtil.maskWithPattern으로 마스킹 후 전달
   - 단, 마스킹하면 건보/국세청 인증에 실제 주민번호가 필요하므로 → 서버 직접 처리 방식이 근본 해결
-- **상태**: 연구중 (방식 보고 후 개발)
+- **상태**: 조치 완료 (11/19)
+- **조치 내용**: PL이 JSP에서 loginByFinCert 함수 및 params.RLNO 삭제, fccom2006R/2007R도 삭제
+- **확인 결과**: Network 탭에서 평문 미노출 확인, 인증 정상 동작
+- **ServerScrap JSP**: 동일 함수 존재하나 테스트서버 조건문(isLocal/isPredev/isDev) 내에서만 RLNO 세팅 → 운영 미노출
+- **PT(fccop2006.jsp)**: 동일하게 테스트 조건문 내에서만 세팅 → 운영 미노출
+- **Service(fccrb0604sS.java)**: 변경 없음 — 삭제된 함수(loginByFinCert)의 호출 경로 없음 확인
 
-**연구 순서**: 052(마스킹, 범위 좁음) → 021(rate limit) → 019(세션 검증, 가장 복잡)
+**연구 순서**: 052(완료) → 021(흐름 파악 완료, 다른 팀원 개발 중) → 019(세션 검증, 가장 복잡)
 
 ---
 

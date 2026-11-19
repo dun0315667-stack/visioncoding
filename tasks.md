@@ -1087,6 +1087,12 @@ if(emptyUrlYn != "Y"){
 - 프론트의 `isRequesting` 플래그는 Burp Suite Intruder로 우회 가능 → 서버 쪽에서 차단 필수
 - 로그아웃 등 다른 분기는 제한 불필요 → `inq_dsc="1"` 안에만 적용
 
+**세션 API (프로프레임웍)**:
+- 저장: `SessionManagerFC.putTempValue(String key, Object value)` — LoginSession 내 임시값 저장
+- 읽기: `SessionManagerFC.getTempValue(String key)` → Object 반환
+- 내부 구조: `HttpSession` → `LoginSession` 객체 → `putTempValue`/`getTempValue`
+- 관련 클래스: `SessionManagerFC.java` (com.nhbank.ef.fc.base.pt.session), `SessionHelper` (HttpSession 직접 접근)
+
 #### NH-WEB-052 (중요정보 마스킹 처리 여부) / FCCRM0600R, FCCRM0614P
 - **현상**: 인증서 선택 화면 진입 시 응답 값에 실명정보 콘솔로 노출 → 인증서 선택 후 다음 단계 진입시에도 같은 노출
 - **근본 원인**: 서버 응답에 주민번호 평문이 포함되어 브라우저 콘솔에서 확인 가능

@@ -1219,6 +1219,85 @@ if(emptyUrlYn != "Y"){
 - **요청**: 주민번호 뒤 7자리 input을 div(role="button" + data-attr) 구조로 변경
 - **보류 사유**: transkey(보안키보드)가 input 태그에 바인딩 → div로 바꾸면 `allocate` 에러 발생. hidden input 유지 필요 여부 등 퍼블/PL 협의 필요
 
+---
+
+## 2026-11-20 (오후)
+
+### [접근성] fcPopup.js 팝업 포커스 관리 — MT/PT 공통
+
+- **상태**: 완료 (modalOpen 포함 전체 해결)
+- **핵심 원인**: `focus()`를 jQuery `fadeIn()` 애니메이션 도중에 호출하면 포커스가 안 붙음. fadeIn 콜백(애니메이션 완료 후)에서 호출해야 함
+- **수정 파일**: MT/PT 각각 `fcPopup.js` (`MT/src/main/webapp/static/service/js/common/fc/fcPopup.js`)
+
+#### 함수별 수정 내용
+
+| 함수 | 방식 | 포커스 대상 | 상태 |
+|------|------|------------|------|
+| modalAlertOpen | fadeIn callback | `.button-area button:first` | ✅ MT/PT |
+| modalConfirmOpen | fadeIn callback | `.button-area button:first` | ✅ MT/PT |
+| modalConfirmOpen2 | fadeIn callback | `.button-area button:first` | ✅ MT/PT |
+| alertOpen | fadeIn callback | `.button-area button:first` | ✅ MT/PT |
+| modalOpen | 기존 setTimeout(500) 안에서 focus | `.modal-window:first` (tabindex="-1") | ✅ MT/PT |
+
+#### modalOpen이 다른 이유
+- modalOpen은 AJAX로 콘텐츠 로드 후 `addClass("slide")` CSS 애니메이션 + `.show()` 사용
+- `.show()` 후 `.fadeIn()`은 이미 보이는 요소라 **no-op** → 콜백 안 불림
+- 해결: fadeIn 콜백 대신 기존 `window.setTimeout(function(){...}, 500)` 블록 안에서 focus 처리
+
+#### 수정 패턴 (fadeIn 계열)
+```javascript
+// BEFORE:
+$('#element').fadeIn();
+$('#element').focus();  // ← 애니메이션 중이라 안 먹힘
+
+// AFTER:
+$('#element').fadeIn(function(){
+    $(this).find('.button-area button').first().focus();
+});
+```
+
+#### 수정 패턴 (modalOpen — setTimeout 계열)
+```javascript
+// 기존 setTimeout(500) 안, attr 설정 후:
+$('#' + serviceId).find('.modal-window').first().attr('tabindex', '-1').focus();
+// fadeIn 콜백 블록은 삭제
+```
+
+#### PT 문법 에러 사고
+- **증상**: PT 전체 화면 안 열림, `ReferenceError: httpSender is not defined`
+- **원인**: `modalConfirmOpen2`에서 `function()` 누락 → JS 문법 에러 → fcPopup.js 전체 로드 실패 → 모든 함수 사용 불가
+```javascript
+// 에러 코드:
+$('#fcCommConfirmPop2').fadeIn(
+    $(this).find('.button-area button').first().focus();  // function(){ 빠짐
+});
+// 올바른 코드:
+$('#fcCommConfirmPop2').fadeIn(function(){
+    $(this).find('.button-area button').first().focus();
+});
+```
+- **교훈**: 공통 JS 파일 수정 시 문법 에러 하나가 전체 사이트를 먹통으로 만듦. fadeIn 콜백은 반드시 `function(){` 포함 확인
+
+### [접근성] fccrm0400r.jsp 체크박스 title 접근성 수정
+
+- **상태**: 완료
+- **파일**: `MT/src/main/webapp/WEB-INF/jsp/service/fc/cr/fccrm0400r.jsp`
+- **문제**: 체크박스 해제 후 재체크 시 span title이 "상세 동의 선택안됨"에서 "선택됨"으로 안 돌아옴
+- **수정 3곳**:
+  1. **개별 체크박스 click handler**: `else { $chk.closest(".form-check").find("span").attr("title", "상세 동의 선택됨"); }` 추가 + `chkAll()`을 if/else 밖으로 이동
+  2. **전체동의(#agCheckAll) change handler**: else 분기 추가 — `$chk.prop("checked", true)` + `.attr("title", "상세 동의 선택됨")`
+  3. **팝업 콜백 (약 308줄)**: `$chk.closest(".form-check").find("span")` 뒤에 `.attr("title", "상세 동의 선택됨")` 추가 (불완전한 체인 수정)
+  4. **전체 체크 영역**: 전체동의 체크/해제 시 title 반영 추가
+
+### 남은 할 일
+- [ ] PT fcPopup.js modalOpen 동일 패턴 적용 확인
+- [ ] 전체 팝업 MT/PT 테스트 (modalAlert, modalConfirm, modalConfirm2, alertOpen, modalOpen)
+- [ ] 접근성 수정 커밋 전 임시코드/console.log 전부 삭제
+- [ ] fco1002 전문매핑 N:1 변경 테스트 (PL 복귀 후)
+- [ ] 배포리스트 엑셀 작성
+- [ ] MT 실기기 테스트
+- [ ] 하드코딩 코드 전부 원복 (커밋 전)
+
 <!-- 템플릿
 ### [카테고리] 제목
 - **상태**: 해결 / 미해결 / 보류

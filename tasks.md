@@ -1422,24 +1422,59 @@ $('#fcCommConfirmPop2').fadeIn(function(){
 - **해결**: `}` 추가
 - **확인**: fcPopup.js 접근성 수정(fadeIn 콜백, aria-modal 등)은 문제없음
 
-### [MCI] scrpgSucYn 게이트 구현 위치 분석
-- **상태**: 분석 완료, 방향 확정 대기
-- **게이트 위치**: `fctcb1100tS.reqLoanLimitTc` — jonCls="5" 분기 안, `callBusinessMciEai` 호출 전
-- **이유**: 사업자만 체크 + MCI 호출 직전 = 최적 위치. execute()는 직장인까지 영향, fctcb1101tS는 이미 세팅 시작 후라 늦음
-- **ScrpInfoYN 출처**: ps311 SQL `NVL(CMPR.SCRPG_SUC_YN, 'N') as "ScrpInfoYN"` — reqLoanLimitTc에서 접근 가능한지 STS에서 확인 필요
-- **구현 패턴**:
-  ```java
-  String scrpInfoYN = /* ps311 결과에서 ScrpInfoYN */;
-  if (!"Y".equals(scrpInfoYN)) {
-      // 스크래핑 미완료 → MCI 안 보냄, 에러 리턴
-  }
-  // callBusinessMciEai 호출
-  ```
+### [MCI] 사업자 MCI 송신 흐름 코드 추적 — 전체 체인 확인
+- **상태**: 코드 추적 완료
+
+#### 전체 호출 체인
+```
+fcccb1100tC.reqLoanLimit (컨트롤러)
+  → fcccb1100tS.reqLoanExec101
+  → fcccb1100tS.execute(map101)
+      → scrpgSucYn=="Y" && jonCls=="5" → putHomeTaxInfo(map101, cmprRqSqno)
+      → scrpgSucYn=="Y" && else → putNHISInfo(map101, cmprRqSqno)
+      → scrpgSucYn!="Y" → 아무것도 안 함 (map101에 홈택스/건보 데이터 없이 넘어감)
+  → fctcb1100tS.reqLoanLimitTc(map101, ...)
+      → isWorker → callMciEai (직장인)
+      → jonCls=="5" → getHometaxBzmnData(cmprRqSqno) → 4필드 세팅 → callBusinessMciEai (사업자)
+      → else → insertLnLmtResult (부결 저장)
+```
+
+#### putHomeTaxInfo 메서드 (fcccb1100tS.java)
+```java
+private void putHomeTaxInfo(HashMap<String, Object> map101, String cmprRqSqno) {
+    inMap = new HashMap<>();
+    inMap.put("cmprRqSqno", cmprRqSqno);
+    outMap = cc110dao.getApiDataHomeTax(inMap);
+    if(!tiUtil.isNullOrEmpty(outMap)) {
+        map101.putAll(outMap);           // 홈택스 데이터 map101에 전부 넣기
+    } else {
+        map101.put("ScrpInfoYN", "N");   // 데이터 없으면 ScrpInfoYN 강제 'N' 덮어쓰기
+    }
+}
+```
+- **cc110dao.getApiDataHomeTax**: 홈택스 테이블에서 사업자 스크래핑 데이터 조회 (CM DAO)
+- **안전장치**: DB에 scrpgSucYn="Y"여도 실제 홈택스 데이터 없으면 ScrpInfoYN을 "N"으로 덮어씀
+- **로컬 테스트 시**: 스크래핑 하드코딩 값이 홈택스 테이블에 적재 → 이 메서드가 읽어서 map101에 넣음
+
+#### 홈택스 데이터 조회가 2군데 존재
+| 위치 | DAO | scrpgSucYn 체크 | 용도 |
+|------|-----|----------------|------|
+| execute() | `cc110dao.getApiDataHomeTax` | **있음** (Y일 때만 호출) | map101에 넣기 (ps311 파라미터용) |
+| reqLoanLimitTc() | `fctcb1100tD.getHometaxBzmnData` | **없음** (무조건 호출) | MCI 4필드 직접 세팅 |
+
+#### scrpgSucYn 게이트 현황
+- execute()에서 scrpgSucYn 체크 **있음** — 하지만 데이터 출처 결정용이지 MCI 차단 게이트 아님
+- reqLoanLimitTc()에서 scrpgSucYn 체크 **없음** — getHometaxBzmnData + callBusinessMciEai 무조건 실행
+- **결과**: 스크래핑 실패해도 MCI 나감. putHomeTaxInfo에서 ScrpInfoYN="N" 덮어써도 reqLoanLimitTc는 그 값 안 봄
+
+#### 게이트 구현 위치 (방향 확정 시)
+- **위치**: `fctcb1100tS.reqLoanLimitTc` — jonCls="5" 분기 안, `callBusinessMciEai` 호출 전
+- **scrpInfoYN 접근**: reqLoanLimitTc 상단에서 이미 사용 중 (건보 데이터 출처 분기)
+- **패턴**: `if (!"Y".equals(scrpInfoYN)) { return 에러; }`
 - **방향 미확정** (PL 확인 필요):
   1. 전문 안 보내기 → 게이트만 추가
   2. 직접입력 받기 → 게이트 + 화면 추가
   3. 빈값 유지 → 게이트 불필요 (현재 상태)
-- **현재 문제**: scrpgSucYn 게이트가 송신 경로에 없어서, 스크래핑 실패해도 NVL 기본값(공동사업자='N', 체납='N')으로 MCI 나감 → 제휴사가 자동승인 처리할 위험
 - **금요일 테스트**: 스크래핑 패스 상태로 MCI 나가는 것 자체 확인용 (게이트 없이)
 
 ### 남은 할 일

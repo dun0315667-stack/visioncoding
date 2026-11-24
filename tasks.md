@@ -1477,13 +1477,110 @@ private void putHomeTaxInfo(HashMap<String, Object> map101, String cmprRqSqno) {
   3. 빈값 유지 → 게이트 불필요 (현재 상태)
 - **금요일 테스트**: 스크래핑 패스 상태로 MCI 나가는 것 자체 확인용 (게이트 없이)
 
+### [DEBUG] custCi 빈값 에러 — 역추적으로 원인 찾기 (디버깅 학습)
+
+#### 증상
+- 로컬 PT에서 스크래핑 직접입력 후 심사요청 → `BizException FCTI000010` (필수입력항목 미입력)
+- 콘솔: `exceptionThrowingClassName=fcccb1100tS, exceptionThrowingLineNumber=89`
+
+#### 디버깅 과정 (역추적 방법)
+
+**Step 1: 에러 위치 확인**
+- 콘솔 로그에서 에러코드 `FCTI000010` + 클래스명 `fcccb1100tS` + 라인 `89` 확인
+- 해당 라인: `throw new BizException("FCTI000010");` — 필수 파라미터 체크
+  ```java
+  if(cmprRqSqno.isEmpty() || custRrno.isEmpty() || custCi.isEmpty()) {
+      throw new BizException("FCTI000010");
+  }
+  ```
+
+**Step 2: 어떤 값이 빈값인지 확인**
+- if문 위에 임시 디버그 로그 추가:
+  ```java
+  log.info("[DEBUG] cmprRqSqno=" + cmprRqSqno + ", custRrno=" + custRrno + ", custCi=" + custCi);
+  ```
+- 결과: **custCi가 빈값**
+
+**Step 3: 값의 출처 추적 (역추적)**
+- `custCi`는 `tiUtil.safeTrim(reqMap, "custCi")`로 가져옴 → reqMap에 없다는 뜻
+- reqMap은 `execute(HashMap reqMap)` 파라미터 → 호출부를 찾아야 함
+
+**Step 4: Call Hierarchy로 호출 체인 확인**
+- STS에서 `execute()` 메서드에 커서 놓고 → `Ctrl+Alt+H` (Call Hierarchy)
+- 호출 체인:
+  ```
+  execute() ← reqLoanExec101() (fcccb1100tS)
+             ← reqLoanLimit() (fcccb1100tC 컨트롤러)
+  ```
+- `reqLoanExec101` 확인: `dataMap.getIn().toMap()`을 그대로 execute에 넘김
+- `reqLoanLimit` (컨트롤러) 확인: `@RequestBody dataMap`을 그대로 서비스에 넘김 → **컨트롤러에서 custCi를 세팅하지 않음**
+
+**Step 5: 프론트에서 보내는지 확인 — 하지만 이건 프론트가 아님**
+- JSP(`fcwsm0700r.jsp`)의 `reqLoanLimit()` 함수 확인:
+  ```javascript
+  httpSender({
+      svcId: 'FCWSM0700I',
+      param: { cmprRqSqno, trDt, cusno, prgStpDsc, pid, vhrNo }
+  });
+  ```
+- param에 `custCi` 없음 → 하지만 이건 직접 `fcccb1100tC`를 호출하는 게 아님
+- `svcId: 'FCWSM0700I'` → `.service` 파일을 거쳐서 **WS 컨트롤러**로 간다
+
+**Step 6: 중간 계층 (WS 컨트롤러) 발견**
+- `FCWSM0700I.service` 파일 확인 → `fcwsm0700sC.reqLoanLimit` 호출
+- 실제 호출 체인:
+  ```
+  JSP httpSender → FCWSM0700I.service → fcwsm0700sC.reqLoanLimit (WS 컨트롤러)
+                                        → fcccb1100tC.reqLoanLimit (CC 컨트롤러)
+                                        → fcccb1100tS.execute
+  ```
+- **fcwsm0700sC.java**에서 세션 정보를 꺼내서 reqMap에 세팅:
+  ```java
+  final CustInfoFC custInfo = SessionManagerFC.getCustInfo();
+  final String ciVal = custInfo == null ? "" : custInfo.getCI_VAL();
+  ...
+  reqMap.getIn().setValue("custCi", ciVal);     // line 97
+  reqMap.getIn().setValue("custRrno", encCustRrno); // line 99
+  ```
+
+**Step 7: 근본 원인 확정**
+- `custCi`는 세션의 `CustInfoFC.getCI_VAL()`에서 가져옴
+- CI(연계정보)는 본인인증 시 발급되는 값
+- 로컬은 더미로그인 → 본인인증 없음 → CI값이 세션에 없음 → 빈값
+- **해결**: fcwsm0700sC.java line 97 아래에 로컬 테스트용 하드코딩 추가
+  ```java
+  if(ciVal == null || ciVal.isEmpty()) {
+      reqMap.getIn().setValue("custCi", "TEST_CI_VALUE");
+  }
+  ```
+- **커밋 전 원복 필수**: fcwsm0700sC.java custCi 하드코딩
+
+#### 학습 포인트: 농협 프레임워크 호출 구조
+```
+[프론트 JSP]
+  httpSender({ svcId: 'FCWSM0700I', param: {...} })
+      ↓
+[.service 파일] FCWSM0700I.service
+  - svcId로 매핑
+  - targetServices에 실제 호출할 CC 컨트롤러 URL 정의
+      ↓
+[WS 컨트롤러] fcwsm0700sC.java ← 여기서 세션 정보 세팅 (custCi, custRrno 등)
+      ↓
+[CC 컨트롤러] fcccb1100tC.java ← @RequestBody로 받아서 그대로 넘김
+      ↓
+[서비스] fcccb1100tS.execute() ← 필수값 체크 + 비즈니스 로직
+```
+- **핵심**: 프론트에서 안 보내는 값이라도, WS 컨트롤러에서 세션 기반으로 세팅할 수 있음
+- **디버깅 순서**: 에러 로그(클래스+라인) → 디버그 로그로 빈값 특정 → Call Hierarchy로 호출부 역추적 → 중간 계층 확인
+
 ### 남은 할 일
 - [ ] CBT 정상화 후 사업자 MCI 검증서버 테스트 (금요일)
 - [x] MT 011 if문 제거 — 수정 완료 + alert 테스트 PASS + 기획서 확인
 - [ ] 전자인증서 5개 pageTitle 적용
-- [ ] 하드코딩 전부 원복 (커밋 전)
+- [ ] 하드코딩 전부 원복 (커밋 전) — fccrb0604sS, fctcb1101tS, **fcwsm0700sC(custCi)**
 - [ ] 스크래핑 연결 후 MCI 4필드 실데이터 재테스트
 - [ ] 배포리스트 엑셀 작성
+- [ ] 소스 인스펙션 JSP (Sparrow) — 돌리는 방법 팀원에게 확인 필요
 
 <!-- 템플릿
 ### [카테고리] 제목

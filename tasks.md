@@ -1368,10 +1368,10 @@ $('#fcCommConfirmPop2').fadeIn(function(){
   | fcdcb1300tS (dc) | `getNhbUrl(cusCtcChanC, aflcnWrsC)` — 동적 |
   | fctcb1400tS | `getNhbUrl("011", aflcnWrsC)` — 혼합 |
 
-### [BRIDGE] MT 011 if문 제거 검토 — PL 지시
-- **상태**: 검토 완료, 적용 대기
+### [BRIDGE] MT 011 if문 제거 — 완료
+- **상태**: 수정 완료 + alert 테스트 PASS + 기획서 확인
 - **파일**: fcmam0106r.jsp
-- **현재 코드**:
+- **변경 전**:
   ```javascript
   if("${map.KFTC_ORG_C}" == "011") {
       openWebPage(res.brpgUrl, function(ret){});      // 당행: brpgUrl 체크 없음
@@ -1379,14 +1379,18 @@ $('#fcCommConfirmPop2').fadeIn(function(){
       openWebPage(res.brpgUrl, function(ret){});      // 제휴사: brpgUrl 체크 있음
   }
   ```
-- **PL 지시**: if문 지우고 else if만 살려도 문제없는지 확인
-- **결론**: **문제없음, 오히려 안전**. 두 분기 동작 동일(openWebPage). 011 분기 제거 시 당행에도 brpgUrl null 체크 추가됨 → about:blank 방지
 - **변경 후**:
   ```javascript
   if(res.brpgUrl) {
       openWebPage(res.brpgUrl, function(ret){});
   }
   ```
+- **PL 지시**: if문 지우고 else if만 살려도 문제없는지 확인
+- **검증**:
+  1. 코드 분석 — 두 분기 동작 동일(openWebPage). 011 분기 제거 시 당행에도 brpgUrl null 체크 추가됨 → about:blank 방지
+  2. alert 테스트 — `alert("brpgUrl: " + res.brpgUrl)` 값 정상 표시, URL로 페이지 이동 정상 동작
+  3. **기획서 확인** — "당행(NH은행): 모바일브랜치로 이동 / 제휴사: 해당 제휴사로 이동". 서버단(fctcb1300tS)에서 당행은 `getNhbUrl("03","11")`=모바일브랜치 URL, 제휴사는 제휴사 URL로 brpgUrl 세팅 → 프론트엔드에서는 brpgUrl 하나로 openWebPage 호출이 기획 의도와 일치
+- **결론**: 기획서 의도 충족 + 코드 안전성 향상 (null 체크 통일)
 
 ### [MCI] 사업자 MCI 로컬 테스트 — 송수신 성공
 - **상태**: 로컬 성공, 검증서버 대기
@@ -1420,7 +1424,7 @@ $('#fcCommConfirmPop2').fadeIn(function(){
 
 ### 남은 할 일
 - [ ] CBT 정상화 후 사업자 MCI 검증서버 테스트 (금요일)
-- [ ] MT 011 if문 제거 적용 + 배포
+- [x] MT 011 if문 제거 — 수정 완료 + alert 테스트 PASS + 기획서 확인
 - [ ] 전자인증서 5개 pageTitle 적용
 - [ ] 하드코딩 전부 원복 (커밋 전)
 - [ ] 스크래핑 연결 후 MCI 4필드 실데이터 재테스트

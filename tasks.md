@@ -1342,6 +1342,89 @@ $('#fcCommConfirmPop2').fadeIn(function(){
 - [ ] MT 실기기 테스트
 - [ ] 하드코딩 코드 전부 원복 (커밋 전)
 - [ ] 접근성 수정 커밋 전 임시코드/console.log 전부 삭제
+- [ ] CBT 정상화 후 사업자 MCI 테스트 (금요일 예정)
+- [ ] MT 011 if문 제거 적용 (PL 확인 후)
+
+---
+
+## 2026-11-24
+
+### [BRIDGE] MT 당행상품 about:blank — 해결
+- **상태**: 해결
+- **문제**: MT에서 당행(011) 상품 클릭 시 about:blank 빈 화면
+- **원인 분석**:
+  - `TIUtil.getNhbUrl(String chnlCd, String itemCd)` 메서드 확인 (line 1025):
+    ```java
+    String tempKey = "J011.URL." + safeTrim(chnlCd) + "." + safeTrim(itemCd);
+    return StringUtils.trimToEmpty(SpringContext.getProperty(tempKey));
+    ```
+  - 키 `J011.URL.03.11` 조합, 값 없으면 빈문자열("") 리턴
+  - common_ti_config.yml dr 환경 URL을 `https://nhlink.nonghyup.com`으로 수정
+- **해결**: URL 수정 → 배포 → CBT(MT)에서 정상 페이지 이동 확인
+- **getNhbUrl 호출 패턴 비교**:
+  | 파일 | 호출 |
+  |---|---|
+  | fctcb1300tS (fc) | `getNhbUrl("03", "11")` — 하드코딩 |
+  | fcdcb1300tS (dc) | `getNhbUrl(cusCtcChanC, aflcnWrsC)` — 동적 |
+  | fctcb1400tS | `getNhbUrl("011", aflcnWrsC)` — 혼합 |
+
+### [BRIDGE] MT 011 if문 제거 검토 — PL 지시
+- **상태**: 검토 완료, 적용 대기
+- **파일**: fcmam0106r.jsp
+- **현재 코드**:
+  ```javascript
+  if("${map.KFTC_ORG_C}" == "011") {
+      openWebPage(res.brpgUrl, function(ret){});      // 당행: brpgUrl 체크 없음
+  }else if(res.brpgUrl) {
+      openWebPage(res.brpgUrl, function(ret){});      // 제휴사: brpgUrl 체크 있음
+  }
+  ```
+- **PL 지시**: if문 지우고 else if만 살려도 문제없는지 확인
+- **결론**: **문제없음, 오히려 안전**. 두 분기 동작 동일(openWebPage). 011 분기 제거 시 당행에도 brpgUrl null 체크 추가됨 → about:blank 방지
+- **변경 후**:
+  ```javascript
+  if(res.brpgUrl) {
+      openWebPage(res.brpgUrl, function(ret){});
+  }
+  ```
+
+### [MCI] 사업자 MCI 로컬 테스트 — 송수신 성공
+- **상태**: 로컬 성공, 검증서버 대기
+- **스크래핑 하드코딩 (fccrb0604sS.java)**:
+  - `PetraCipherUtil.encrypt()` 로컬에서 예외 발생 → line 83도 주석 필요
+  - 로컬은 PETRA 미동작 → 암호화된 주민번호 직접 하드코딩
+  - `inputMap.put("주민등록번호", "암호화값")` — line 85
+- **MCI 바디 하드코딩 (fctcb1101tS.java)**:
+  - `cusnm` ≠ 주민번호. `pwize_tr_rlno`가 암호화거래실명번호 (line 300)
+  - `mciDataMap.getIn().setValue("pwize_tr_rlno", "암호화값")` — 여기에 하드코딩
+  - 주의: `setMciBody`와 `setApiBody` 두 곳에서 세팅 — 한쪽만 바꾸면 덮어써짐
+- **로컬 결과**: MCI 송신 + 역거래 응답 수신 확인
+- **검증서버(CBT)**: 현재 CBT 환경 막힘 (한도 미수신 상태). 금요일 정상화 예정
+- **CBT 아빠계정 테스트**: MCI 아예 안 나감 + 송수신이력 테이블에도 없음 → CBT 환경 차단이 원인
+- **커밋 전 원복 필수**: 주민번호 하드코딩(fccrb0604sS, fctcb1101tS), PetraCipherUtil 주석, 디버그 로그 전부
+
+### [CONFIG] 전자인증서 pageTitle 추가 — 방법 확정
+- **상태**: 방법 확정, 적용 대기
+- **파일**: fccrm0600sC.java (컨트롤러), fccrm0614p.jsp (JSP)
+- **현재**: 컨트롤러에 `pageTitle = "전자서명확인"` 고정값
+- **방법1 (권장)**: 컨트롤러에서 atoaTpc로 if-else 분기
+- **방법2 (급할 때)**: JSP에서 `<c:set>` — template-main.jsp에서 "NH금융상품비교" 자동 추가되므로 뒤에 안 넣어도 됨
+- **atoaTpc 분기**: 1=네이버, 2=카카오, 3=토스, 4=PASS, 7=NH인증
+
+### [BUG] fcPopup.js SyntaxError — 해결
+- **상태**: 해결
+- **문제**: PT smartdev에서 공유하기 팝업(FCCOP0120P) 열 때 `Uncaught SyntaxError: Failed to execute 'appendChild'`
+- **원인**: FCCOP0120P JSP의 initPage 함수에서 `}` 누락
+- **해결**: `}` 추가
+- **확인**: fcPopup.js 접근성 수정(fadeIn 콜백, aria-modal 등)은 문제없음
+
+### 남은 할 일
+- [ ] CBT 정상화 후 사업자 MCI 검증서버 테스트 (금요일)
+- [ ] MT 011 if문 제거 적용 + 배포
+- [ ] 전자인증서 5개 pageTitle 적용
+- [ ] 하드코딩 전부 원복 (커밋 전)
+- [ ] 스크래핑 연결 후 MCI 4필드 실데이터 재테스트
+- [ ] 배포리스트 엑셀 작성
 
 <!-- 템플릿
 ### [카테고리] 제목

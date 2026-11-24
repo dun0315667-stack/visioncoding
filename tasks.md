@@ -1422,6 +1422,26 @@ $('#fcCommConfirmPop2').fadeIn(function(){
 - **해결**: `}` 추가
 - **확인**: fcPopup.js 접근성 수정(fadeIn 콜백, aria-modal 등)은 문제없음
 
+### [MCI] scrpgSucYn 게이트 구현 위치 분석
+- **상태**: 분석 완료, 방향 확정 대기
+- **게이트 위치**: `fctcb1100tS.reqLoanLimitTc` — jonCls="5" 분기 안, `callBusinessMciEai` 호출 전
+- **이유**: 사업자만 체크 + MCI 호출 직전 = 최적 위치. execute()는 직장인까지 영향, fctcb1101tS는 이미 세팅 시작 후라 늦음
+- **ScrpInfoYN 출처**: ps311 SQL `NVL(CMPR.SCRPG_SUC_YN, 'N') as "ScrpInfoYN"` — reqLoanLimitTc에서 접근 가능한지 STS에서 확인 필요
+- **구현 패턴**:
+  ```java
+  String scrpInfoYN = /* ps311 결과에서 ScrpInfoYN */;
+  if (!"Y".equals(scrpInfoYN)) {
+      // 스크래핑 미완료 → MCI 안 보냄, 에러 리턴
+  }
+  // callBusinessMciEai 호출
+  ```
+- **방향 미확정** (PL 확인 필요):
+  1. 전문 안 보내기 → 게이트만 추가
+  2. 직접입력 받기 → 게이트 + 화면 추가
+  3. 빈값 유지 → 게이트 불필요 (현재 상태)
+- **현재 문제**: scrpgSucYn 게이트가 송신 경로에 없어서, 스크래핑 실패해도 NVL 기본값(공동사업자='N', 체납='N')으로 MCI 나감 → 제휴사가 자동승인 처리할 위험
+- **금요일 테스트**: 스크래핑 패스 상태로 MCI 나가는 것 자체 확인용 (게이트 없이)
+
 ### 남은 할 일
 - [ ] CBT 정상화 후 사업자 MCI 검증서버 테스트 (금요일)
 - [x] MT 011 if문 제거 — 수정 완료 + alert 테스트 PASS + 기획서 확인

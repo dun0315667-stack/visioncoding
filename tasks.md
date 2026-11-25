@@ -1590,10 +1590,58 @@ private void putHomeTaxInfo(HashMap<String, Object> map101, String cmprRqSqno) {
 | `io_ptax_dlq_yn` | 체납여부 | 고정값 "N" |
 
 - **코드 위치**: `fctcb1100tS.reqLoanLimitTc` → jonCls="5" 분기
-  - `fctcb1100tD.getHometaxBzmnData(cmprRqSqno)` 로 4필드 조회
+  - `fctcb1100tD.getHometaxBzmnData(cmprRqSqno)` 로 4필드 조회 → **ps111 쿼리** (LEFT OUTER JOIN + NVL fallback)
   - `resultBodyMap.put("io_dh_business_id", ...)` 등으로 세팅
   - `fctcb1101tS.callBusinessMciEai` 로 MCI 송신
 - **전문 DTO**: `RCIS9593IR_IN_MST.java` (자동생성, 수정 금지)
+
+#### 1-1. 테스트용 하드코딩 최소 세팅 (doHomeTaxScrapping)
+
+**파일**: `fccrbHomeTaxScrappingService.java` → `doHomeTaxScrapping`
+**테이블**: `TB_EF_FC_CH_HTAX_PSN_BZMN` (홈택스 개인사업자 내역)
+**PK (NOT NULL)**: TR_DT, WK_MM, CMPR_RQ_SQNO, CNFWR_SQNO — 나머지 전부 NULL 허용
+
+**최소 세팅 코드:**
+```java
+String bzmNo = dataMap.getIn().getValue("bzmNo");
+int cnfwrSqno = Integer.parseInt(RandomStringUtils.randomNumeric(9));
+insertMap.getIn().setValue("cnfwrSqno", cnfwrSqno);
+
+// MCI 필수 4필드
+insertMap.getIn().setValue("bzmNo", bzmNo);        // 사업자번호 (dataMap에서 자동)
+insertMap.getIn().setValue("ntsBzcc", "722000");    // 국세청업종코드
+insertMap.getIn().setValue("commBzmnYn", "N");      // 공동사업자여부
+insertMap.getIn().setValue("dlqYn", "N");           // 체납여부
+
+// 홈택스 테이블 저장
+fccob2001D.deleteHomeTaxData(dataMap);
+fccob2001D.insertHomeTaxData(insertMap);
+
+// 비교신청 테이블 업데이트 (ps111 fallback용 BZMN_BZCC + SCRPG_SUC_YN)
+insertMap.getIn().setValue("SCRPG_SUC_YN", "Y");
+insertMap.getIn().setValue("bzmBzcc", classifyNtsBzcc("722000"));
+// icm_ext_yn if문 유지 (aduYrIcmAm 없으면 "N" 세팅됨)
+
+fccob2001D.updatePublicMyData(insertMap);
+resultMap.getOut().setValue("SCRPG_SUC_YN", "Y");
+```
+
+**제거한 필드 (MCI 무관, NULL 허용):**
+- `idvdYrSlam`, `idvdYrIcmAm`, `aduYrSlam`, `aduYrIcmAm` (매출/소득)
+- `bzplnm`, `opnbDt`, `bztpnm`, `ntsBzcnm` (사업장 정보)
+
+**유지한 이유:**
+- `classifyNtsBzcc` → 국세청업종코드를 대분류("1"~"4")로 변환. ps111 fallback에서 `R.BZMN_BZCC` CASE 변환에 사용
+- `updatePublicMyData` (pu001) → 비교신청 테이블에 BZMN_BZCC, SCRPG_SUC_YN 세팅
+- `icm_ext_yn` if문 → 소득증빙여부 판단, pu001 조건부 UPDATE
+
+**ps111 fallback 구조** (LEFT OUTER JOIN):
+- 홈택스 테이블 데이터 없어도 비교신청 테이블에서 사업자번호 가져옴 (`NVL(H.BZMN_NO, R.BZMN_NO)`)
+- comm_bzmn_yn, dlqYn은 NVL 기본값 "N"
+- ntsBzcc는 BZMN_BZCC CASE 변환 (1→369908, 2→523999, 3→630909, 4→930925)
+
+**테스트 범위**: 한도조회까지만 가능 (제휴사에서 상품 미제공으로 대출신청 불가)
+**팀원이 바꿀 값**: 없음 — bzmNo는 dataMap에서 자동, 나머지 고정값
 
 #### 2. 수신 — 역거래 결과통지 (금리/한도)
 

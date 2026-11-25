@@ -1688,8 +1688,115 @@ resultMap.getOut().setValue("SCRPG_SUC_YN", "Y");
 - **코드 위치**: `fctcb1200tS.java` → `fctcb1200tD.insertMciHist` → `fctcb02_sql.xml` INSERT INTO CNTGRM_SNR
 - **한도조회 UPDATE**: `fctcb1200tD.updateLoanLimitResult` → MERGE INTO LMT_INQAMN
 
+---
+
+## 2026-11-25
+
+### [보안] WEB-SER-019 취약점 — PL 수정 코드 분석 & 개선 방향 (학습용)
+
+#### 취약점 원리
+- A 사용자 로그인(세션=A) → Burp Suite로 프론트 응답 가로채서 B 정보로 변조 → B의 RLNO/이름으로 스크래핑 실행 → A 세션에서 B 데이터 조회 가능
+- **근본 원인**: 프론트에서 올라온 파라미터(RLNO/이름/생년월일)를 서버가 검증 없이 그대로 사용
+
+#### PL 수정 코드 (fccrm0605sC.java) — 3가지
+
+**수정1. RLNO 세션값 덮어쓰기 (setCustInfoToDataMap line 179, doHomeTaxScrapping line 231)**
+```java
+// 기존: 운영환경에서만 세션값 사용
+if(EnvUtil.isProd() || EnvUtil.isDr() || "".equals(RLNO)) {
+    dataMap.getIn().setValue("RLNO", custInfo.getRLNO());
+}
+// 수정: 무조건 세션값으로 덮어쓰기
+dataMap.getIn().setValue("RLNO", custInfo.getRLNO());
+```
+→ 프론트가 B 주민번호 보내도 A(세션)로 강제 교체
+
+**수정2. checkCustInfo 게이트 추가 (line 67, 313)**
+```java
+if(!checkCustInfo(dataMap)) {
+    // 에러코드 "NCC0C00001" 리턴 + 로직 차단
+}
+```
+→ 로그인요청(inq_dsc="1")과 간편인증(processSimpleAuth) 양쪽에 적용
+
+**수정3. checkCustInfo 메서드 (line 373~)**
+```
+비교 대상:
+  세션(서버)                     vs  프론트(HTTP 파라미터)
+  custInfo.getCUS_NM()           ↔  dataMap "username"
+  custInfo.getRLNO() → 생년월일   ↔  dataMap "userbirthday"
+  MpsvNo+MphNo+MpsqNo            ↔  dataMap "userphone"
+  통신사                          ↔  dataMap "usertelcd"
+
+→ 하나라도 불일치 → return false → 차단
+→ 사업자(lnRqJobC="5")는 체크 스킵
+```
+
+#### PL 방식의 약점
+
+```
+[공격자가 세션값을 맞추면 우회 가능]
+  → A로 로그인 (세션 = A)
+  → 프론트 파라미터도 A 정보로 맞춰서 전송
+     username = "A이름"       ← 세션과 일치
+     userbirthday = "A생년월일" ← 세션과 일치
+  → checkCustInfo 통과됨
+  → RLNO는 덮어쓰기로 막히지만, 다른 경로 우회 가능성 존재
+```
+- "비교(compare)"는 프론트값이 세션과 같으면 통과시킴 → 통과 후 프론트값이 dataMap에 남아서 로직에 사용됨
+- "덮어쓰기(overwrite)"는 프론트값을 무시하고 세션값으로 교체 → 프론트값이 로직에 쓰일 여지가 없음
+
+#### 개선 방향 — 프론트 파라미터 자체를 안 쓰기 (덮어쓰기 확장)
+
+RLNO에 이미 적용된 "세션값 덮어쓰기"를 나머지 필드에도 확장:
+```java
+// 프론트 값 무시, 세션에서 직접 가져다 씀
+dataMap.getIn().setValue("RLNO", custInfo.getRLNO());
+dataMap.getIn().setValue("username", custInfo.getCUS_NM());
+dataMap.getIn().setValue("userbirthday", 세션에서 생년월일 조합);
+dataMap.getIn().setValue("userphone", 세션에서 전화번호 조합);
+```
+→ checkCustInfo 비교 로직 자체가 필요 없어짐
+→ 프론트가 뭘 보내든 세션 정보로만 실행됨
+→ 변조할 대상 자체가 사라짐
+
+#### 더 근본적인 방법들 (구현 복잡도 높음)
+
+| 방식 | 설명 | 장점 | 단점 |
+|------|------|------|------|
+| CI/DI 세션 바인딩 | 본인인증 성공 시 인증기관이 보내준 CI를 세션에 저장 → 이후 요청 시 로그인 사용자 CI와 비교 | 제3자 검증이라 조작 불가 | CI 연동 필요 |
+| 인증 후 세션 재생성 | 본인인증 성공 시 기존 세션 무효화 + 새 세션 생성 | 세션 불일치 자체 불가능 | 기존 세션 데이터 유실 위험 |
+| DB 직접 비교 | cusNo 기준으로 DB에서 이름/생년월일 조회해서 비교 | 프론트 조작 불가 | DB 조회 추가 비용 |
+
+#### 핵심 정리
+- **PL 방식**: 실용적이고 대부분 막힘. RLNO 덮어쓰기 + checkCustInfo 조합
+- **간단한 개선**: 나머지 필드도 RLNO처럼 세션값 덮어쓰기 → checkCustInfo 불필요
+- **비교(compare) vs 덮어쓰기(overwrite)**: 비교는 프론트값이 맞으면 통과시켜서 그 값이 로직에 남음. 덮어쓰기는 프론트값을 아예 교체해서 쓸 여지를 없앰
+
+### [MCI] 사업자 필수 필드 테스트 — 진행 중
+
+#### 하드코딩 필드별 필수 여부 테스트 (11/25)
+| 필드 | 하드코딩값 | 빼고 테스트 | 결과 |
+|------|-----------|-----------|------|
+| idvdYrSlam (개별년매출) | "9000000" | 빼봄 | 정상 → 필수 아님 |
+| idvdYrIcmAm (개별년소득) | "19000000" | 빼봄 | 정상 → 필수 아님 |
+| aduYrSlam (가산년매출) | "29000000" | 빼봄 | 정상 → 필수 아님 |
+| aduYrIcmAm (가산년소득) | "39000000" | 빼봄 | 정상 → 필수 아님 |
+| bzplnm (사업장명) | "테스트_사업자2" | 아직 미확인 | |
+| **opnbDt (개업일자)** | "20240101" | **빼봄** | **실패 → 필수 확정** |
+| ntsBzcc (업종코드) | "722000" | 아직 미확인 | |
+| bztpnm (업종명) | "정보통신업" | 아직 미확인 | |
+| ntsBzcnm (업종상세명) | "응용 소프트웨어..." | 아직 미확인 | |
+| commBzmnYn (공동사업자) | "N" | 4개필드에 포함 | |
+| dlqYn (체납여부) | "N" | 4개필드에 포함 | |
+
+- **"전문발송조건미충족"**: 필수 필드가 빠지면 MCI 전문 자체가 발송 안 됨 → 역거래에서 ontact_ln_wrs_cfc(PD301) 없이 돌아옴
+- **실제 스크래핑 데이터**: 사업자는 idvd(개별=급여소득) 필드가 비어있는 게 정상 → 이건 원인 아니었음
+- **opnbDt 필수 확정**: 빼면 전문발송조건미충족, 넣으면 정상
+
 ### 남은 할 일
-- [ ] CBT 정상화 후 사업자 MCI 검증서버 테스트 (금요일)
+- [ ] 사업자 필수 필드 나머지 테스트 (ntsBzcc, bztpnm, ntsBzcnm, bzplnm)
+- [ ] CBT 정상화 후 사업자 MCI 검증서버 테스트
 - [x] MT 011 if문 제거 — 수정 완료 + alert 테스트 PASS + 기획서 확인
 - [ ] 전자인증서 5개 pageTitle 적용
 - [ ] 하드코딩 전부 원복 (커밋 전) — fccrb0604sS, fctcb1101tS, **fcwsm0700sC(custCi)**

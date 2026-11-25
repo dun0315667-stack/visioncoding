@@ -1773,29 +1773,41 @@ dataMap.getIn().setValue("userphone", 세션에서 전화번호 조합);
 - **간단한 개선**: 나머지 필드도 RLNO처럼 세션값 덮어쓰기 → checkCustInfo 불필요
 - **비교(compare) vs 덮어쓰기(overwrite)**: 비교는 프론트값이 맞으면 통과시켜서 그 값이 로직에 남음. 덮어쓰기는 프론트값을 아예 교체해서 쓸 여지를 없앰
 
-### [MCI] 사업자 필수 필드 테스트 — 진행 중
+### [MCI] 사업자 스크래핑 실패 → 직접입력 → 역거래 정상 수신 확인 — 완료
 
-#### 하드코딩 필드별 필수 여부 테스트 (11/25)
-| 필드 | 하드코딩값 | 빼고 테스트 | 결과 |
-|------|-----------|-----------|------|
-| idvdYrSlam (개별년매출) | "9000000" | 빼봄 | 정상 → 필수 아님 |
-| idvdYrIcmAm (개별년소득) | "19000000" | 빼봄 | 정상 → 필수 아님 |
-| aduYrSlam (가산년매출) | "29000000" | 빼봄 | 정상 → 필수 아님 |
-| aduYrIcmAm (가산년소득) | "39000000" | 빼봄 | 정상 → 필수 아님 |
-| bzplnm (사업장명) | "테스트_사업자2" | 아직 미확인 | |
-| **opnbDt (개업일자)** | "20240101" | **빼봄** | **실패 → 필수 확정** |
-| ntsBzcc (업종코드) | "722000" | 아직 미확인 | |
-| bztpnm (업종명) | "정보통신업" | 아직 미확인 | |
-| ntsBzcnm (업종상세명) | "응용 소프트웨어..." | 아직 미확인 | |
-| commBzmnYn (공동사업자) | "N" | 4개필드에 포함 | |
-| dlqYn (체납여부) | "N" | 4개필드에 포함 | |
+#### 테스트 결과 (11/25)
+- 하드코딩 원복 (PL이 만든 가값 하드코딩 → 원래 callODP 코드로 복원)
+- 테스트 사업자 계정으로 스크래핑 실패 시 **직접입력값**으로 진행
+- MCI 가심사요청 송신 → 역거래 정상 수신 확인
 
-- **"전문발송조건미충족"**: 필수 필드가 빠지면 MCI 전문 자체가 발송 안 됨 → 역거래에서 ontact_ln_wrs_cfc(PD301) 없이 돌아옴
-- **실제 스크래핑 데이터**: 사업자는 idvd(개별=급여소득) 필드가 비어있는 게 정상 → 이건 원인 아니었음
-- **opnbDt 필수 확정**: 빼면 전문발송조건미충족, 넣으면 정상
+#### 왜 되는가 — ps111 NVL fallback 설계
+```sql
+-- ps111 하단 (사업자 전용 4필드)
+SELECT NVL(H.BZMN_NO, R.BZMN_NO) AS "io_dh_business_id",
+       NVL(H.COMM_BZMN_YN, 'N') AS "comm_bzmn_yn",
+       ...
+FROM EFFC.TB_EF_FC_CM_CMPR_RQAMN R           -- 비교신청 테이블 (직접입력값)
+LEFT OUTER JOIN EFFC.TB_EF_FC_CH_HTAX_PSN_BZMN H  -- 홈택스 테이블 (스크래핑 데이터)
+  ON R.CMPR_RQ_SQNO = H.CMPR_RQ_SQNO
+```
+- 스크래핑 성공 시: 홈택스 테이블(H)에서 값 가져옴
+- 스크래핑 실패 시: H가 NULL → NVL로 비교신청 테이블(R)에서 fallback
+- **직접입력값이 비교신청 테이블에 저장되므로**, 스크래핑 없이도 MCI 전문에 필드가 채워짐
+- **이 NVL fallback 설계는 정책상 맞는 구조** (PL 확인)
+
+#### 하드코딩 diff 구조 (참고)
+PL이 만든 하드코딩은 callODP(홈택스 스크래핑 API) 4건을 주석 처리하고 가값으로 대체한 것:
+
+| callODP | 용도 | 필드 |
+|---------|------|------|
+| HT18 | 소득금액증명 | idvdYrSlam, idvdYrIcmAm, aduYrSlam, aduYrIcmAm |
+| HT08 | 사업자등록증명 | bzplnm, opnbDt, commBzmnYn |
+| HT10 | 업종조회 | ntsBzcc, bztpnm, ntsBzcnm |
+| HT09 | 납세증명서 | dlqYn |
+
+스크래핑 연결되면 주석 풀고 하드코딩 삭제하면 됨. 그 전까지는 직접입력 → NVL fallback 경로로 동작.
 
 ### 남은 할 일
-- [ ] 사업자 필수 필드 나머지 테스트 (ntsBzcc, bztpnm, ntsBzcnm, bzplnm)
 - [ ] CBT 정상화 후 사업자 MCI 검증서버 테스트
 - [x] MT 011 if문 제거 — 수정 완료 + alert 테스트 PASS + 기획서 확인
 - [ ] 전자인증서 5개 pageTitle 적용

@@ -1573,6 +1573,77 @@ private void putHomeTaxInfo(HashMap<String, Object> map101, String cmprRqSqno) {
 - **핵심**: 프론트에서 안 보내는 값이라도, WS 컨트롤러에서 세션 기반으로 세팅할 수 있음
 - **디버깅 순서**: 에러 로그(클래스+라인) → 디버그 로그로 빈값 특정 → Call Hierarchy로 호출부 역추적 → 중간 계층 확인
 
+### [MCI] 사업자 MCI 필드 조사 — 송신/수신 필드 + 테이블 구조 (11/25)
+
+#### 배경
+- 팀장 지시: 스크래핑 실패해도 사업자 대출 보내고 역거래로 금리한도 받을 수 있게 → 송신 필수 필드 + 수신 필드 조사
+- 회의 확인: 사업자 전용 필드 4개만 추가 세팅. 2개는 "N", 사업자번호 + 국세청 업종코드는 실제값 필요
+
+#### 송신 필수 필드 (사업자 전용 4개)
+| MCI 필드명 | 의미 | 값/비고 |
+|-----------|------|--------|
+| `io_dh_business_id` | 사업자번호 | 실제값 (스크래핑 or 직접입력) |
+| `nts_pnp_bzcc` | 국세청 업종코드 | 국세청 코드 변환 필요 (자바 로직 있음, 쿼리로도 가능) |
+| `comm_bzmn_yn` | 공동사업자여부 | 기본 "N" |
+| `io_ptax_dlq_yn` | 체납여부 | 기본 "N" |
+
+- **코드 위치**: `fctcb1100tS.reqLoanLimitTc` → jonCls="5" 분기
+  - `fctcb1100tD.getHometaxBzmnData(cmprRqSqno)` 로 4필드 조회
+  - `resultBodyMap.put("io_dh_business_id", ...)` 등으로 세팅
+  - `fctcb1101tS.callBusinessMciEai` 로 MCI 송신
+- **전문 DTO**: `RCIS9593IR_IN_MST.java` (자동생성, 수정 금지)
+
+#### 수신 필드 (역거래 결과통지 — 금리/한도 등)
+
+**관련 테이블 3개:**
+| 테이블 | 용도 |
+|--------|------|
+| `TB_EF_FC_CH_CNTGRM_SNR` | 연계전문 송수신내역 (전문 원본 저장) |
+| `TB_EF_FC_CH_LN_EXAMN` | 대출실행관리내역 (비즈니스 필드) |
+| `TB_EF_FC_CH_LN_EXAMN_DTL` | 대출실행관리상세내역 |
+
+**역거래 수신 핵심 필드 (EXAMN / EXAMN_DTL):**
+| 컬럼명 | 속성명 | 설명 |
+|--------|--------|------|
+| `TOT_LN_LMT_AM` | 총대출한도금액 | 103전 처리시 0, 104전에서 실행금액 세팅 |
+| `LS_LN_AM` | 대출실행금액 | |
+| `LN_PRD_MTCN` | 대출기간개월수 | |
+| `RPY_METH_DSC` | 상환방법구분코드 | |
+| `ITR_TP_DSC` | 금리유형구분코드 | 1: 변동금리, 2: 고정금리 |
+| `BASITR` | 기준금리 | |
+| `APL_ITRRT` | 적용이율(가산금리) | |
+| `PRM_YN` | 우대여부 | Y: 적용, N: 없음 |
+| `ITR_PRM_RSNCTT` | 금리우대사유내용 | Y일 때 어떤 우대 적용됐는지 |
+| `ITR_PRM_LMT_AM` | 금리우대한도금액 | |
+| `PRITR` | 우대금리 | |
+| `MID_RPY_FEERT` | 중도상환수수료 | |
+| `CHRR_CTCPL_CNTN` | 담당연락처내용 | 44자리만 사용 |
+| `CHBF_SP_PRITR` | 대출제별우대금리 | |
+| `LN_ACNO` | 대출계좌번호 | |
+| `PRC_STSC` | 처리상태코드 | |
+| `RTN_RSNCTT` | 반려사유내용 | |
+| `LN_RQ_AM` | 대출신청금액 | |
+| `LN_RQ_DT` | 대출신청일자 | |
+| `LN_EXE_DT` | 대출실행일자 | |
+
+**공통 식별 필드 (송수신 공통):**
+| 컬럼명 | 속성명 |
+|--------|--------|
+| `TR_DT` | 거래일자 |
+| `WK_MM` | 작업월 (파티션키) |
+| `CMPR_RQ_SQNO` | 비교신청일련번호 |
+| `AFLCN_C` | 제휴사코드 |
+| `AFLCN_WRS_AMN_C` | 제휴사상품관리코드 |
+| `LN_RQ_SQNO` | 대출신청일련번호 |
+| `TGRM_TPC` | 전문유형코드 |
+| `RQR_TGRM_NATV_NO` | 요청전문고유번호 |
+| `NTC_TGRM_NATV_NO` | 통지전문고유번호 |
+| `FIN_US_NO` | 핀테크이용번호 |
+| `AFLCN_URLNM` | 제휴사URL명 |
+
+- **코드 위치**: `fctcb1200tS.java` → `fctcb1200tD.insertMciHist` → `fctcb02_sql.xml` INSERT INTO `EFFC.TB_EF_FC_CH_CNTGRM_SNR`
+- **한도조회 UPDATE**: `fctcb1200tD.updateLoanLimitResult` → `fctcb_tb_ef_fc_ch_lmt_inqamn_pu122_ea`
+
 ### 남은 할 일
 - [ ] CBT 정상화 후 사업자 MCI 검증서버 테스트 (금요일)
 - [x] MT 011 if문 제거 — 수정 완료 + alert 테스트 PASS + 기획서 확인

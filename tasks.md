@@ -1824,11 +1824,12 @@ PL이 만든 하드코딩은 callODP(홈택스 스크래핑 API) 4건을 주석 
 - **상태**: 통합테스트 진척현황 엑셀에 해결 반영 필요
 
 ### 남은 할 일
-- [ ] 전자인증서 5개 pageTitle 적용
+- [x] 전자인증서 5개 pageTitle 적용 — 심사 통과
+- [x] 면적 선택 팝업 tabindex + focus — 공통모듈 적용 확인, 심사 통과
+- [x] fcjim1400r.jsp 차량번호 aria-label — 심사 통과
+- [x] 통합테스트 진척현황 엑셀 당행 빈화면 해결 반영 — 완료
+- [x] 소스 인스펙션 JSP (Sparrow) — 다른 팀원 작업 중
 - [ ] 스크래핑 연결 후 MCI 4필드 실데이터 재테스트
-- [ ] 소스 인스펙션 JSP (Sparrow) — 돌리는 방법 팀원에게 확인 필요
-- [ ] 면적 선택 팝업 (FCMIP2201P) tabindex + focus 적용
-- [ ] fcjim1400r.jsp PT: 차량번호 input aria-label 추가
 - [ ] fco1002 전문매핑 N:1 변경 테스트 (PL 복귀 후)
 
 <!-- 템플릿

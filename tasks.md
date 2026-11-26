@@ -1849,6 +1849,33 @@ PL이 만든 하드코딩은 callODP(홈택스 스크래핑 API) 4건을 주석 
 - **결론**: N:1 전문매핑 변경해도 문제없음. 상품 2개가 같은 번호로 묶여서 정상 송수신됨
 - **이전 분석과 일치**: fco0009(N:1, 5건)에서 같은 코드 경로로 정상 적재 → fco1003에서도 2건 직접 확인
 
+### [학습] 직장인 가심사요청 송신 플로우 추적 (PT 기준)
+- **상태**: 학습 완료
+- **추적 경로**:
+  1. **JSP (fcjim2500r.jsp)** — submitConfirm() 함수. httpSender로 FCJIM2500I(고객정보 저장) 호출 → 성공 후 navigate로 다음 화면 이동. `${nextServiceId}`는 서버에서 JSP 렌더링 시 주입되는 값
+  2. **WS 컨트롤러 (fcwsm0700sC.reqLoanLimit)** — 세션(CustInfoFC) + 프론트(frontData) 데이터를 reqMap에 조립. 택배 포장소 역할
+  3. **WS 서비스 (fcwsm0700sS.reqLoanLimit)** — `serviceClient.callService(POST, "/FCCCB1100C/reqLoanLimit")` → TI 호출. 에러 처리(FCTI000007/9 정상처리, 그 외 throw). 성공 시 카카오 푸시 + 진행상태 "08" 저장
+  4. **TI 컨트롤러 (fcccb1100tC.reqLoanLimit)** — `return fcccb1100tS.reqLoanExec101(dataMap)`
+  5. **TI 서비스 (fcccb1100tS.execute)** — 필수값 체크(cmprRqSqno/custRrno/custCi) → 기존 신청이력 조회 → 전문바디 조립 → MCI 송신
+- **메서드 분석 방법**:
+  - 시그니처 먼저 읽기: 리턴타입, 메서드명, 파라미터
+  - 코드를 3구역으로 나누기: 데이터 꺼내기 / 조립(setValue) / 다음 레이어 호출
+  - F3(Ctrl+클릭)으로 호출 메서드 타고 들어가기
+- **데이터 출처 구분**:
+  - `SessionManagerFC` → 세션값 (이전 화면에서 세팅됨)
+  - `custInfo.getXXX()` → 세션의 고객정보 (로그인/본인인증 시 세팅)
+  - `reqMap.getIn().getValue()` → 프론트에서 넘어온 파라미터
+- **JSP 변수 추적법**: `${nextServiceId}` 같은 EL변수는 Ctrl+H 전체 검색 또는 브라우저 F12에서 렌더링된 실제값 확인
+
+### [학습] WEB-SER-019 취약점 보안 방식 비교
+- **상태**: 학습 완료
+- **취약점**: Burp Suite로 프론트 응답 가로채서 본인정보 변조 → 타인 데이터 조회
+- **PL 방식 (비교)**: RLNO 세션값 덮어쓰기 + 나머지 4필드 세션 vs 프론트 파라미터 비교(checkCustInfo). 불일치하면 에러
+- **덮어쓰기 방식**: 모든 민감 필드를 세션값으로 setValue. checkCustInfo 불필요
+- **정석 (설계 변경)**: 프론트에서 민감 데이터를 아예 보내지 않음. 서버가 세션에서만 꺼내 사용
+- **비교 vs 덮어쓰기 실질적 차이**: 비교가 정확하면 보안 강도는 동일. 덮어쓰기의 장점은 보안 수준이 아니라 **실수 방지**(비교 로직 버그, 필드 누락, 코드 복잡성)
+- **현실적 최선**: 덮어쓰기 (SI 프로젝트에서 프론트 구조 전면 변경은 리스크 큼)
+
 ### [BUG] dev PT custCi 빈값 — 원인 추적 완료
 - **상태**: 원인 확인 (테스트 환경 한계, 코드 버그 아님)
 - **현상**: dev PT에서 사업자/직장인 가심사요청 시 "필수입력항목 미입력"(FCTI000010) 에러

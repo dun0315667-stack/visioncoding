@@ -1902,6 +1902,48 @@ PL이 만든 하드코딩은 callODP(홈택스 스크래핑 API) 4건을 주석 
   - Ctrl+Shift+G로 setCI_VAL 전역 검색 → 세팅 위치 추적
   - 에러 원인은 코드 변경이 아니라 테스트 환경(더미 로그인 오류 → 새로고침 → 세션 초기화)이었음
 
+## 2026-11-27
+
+### [학습] 전문매핑 = 결과통지방법코드 = RZT_NTC_METHC — 분석 완료
+- **상태**: 완료 (11/20 분석 수정)
+- **이전 분석 (11/20)**: "전문매핑 ≠ 결과통지방법코드 (별개 설정)" → **틀렸음**
+- **수정**: 같은 컬럼 (`TB_EF_FC_CM_AFLCN.RZT_NTC_METHC`)
+- **관리자페이지 추적 경로**: JSP → fcpaa0100dS.saveTupOrgInfo → fcpaa0100D.updateTupOrg → fcpaa02_sql.xml UPDATE `TB_EF_FC_CM_AFLCN` SET `RZT_NTC_METHC = #{rztNtcMethc}`
+- **전체 흐름**:
+  1. AM(관리자)에서 전문매핑 설정 → `TB_EF_FC_CM_AFLCN.RZT_NTC_METHC`에 적재 (1/2/3)
+  2. TI ps310에서 제휴사 조회 시 `RZT_NTC_METHC` SELECT → Java `rztCode` 변수로 세팅
+  3. `RZT_NTC_METHC='3'`이면 ps310 CASE WHEN으로 fisCodeList에 상품코드 미리 준비
+  4. rztCode 분기 → ps315/316/317 중 하나 실행
+  5. 역거래 수신에서는 rztCode 분기 없음 — 동일 처리
+
+### [학습] ps315 vs ps317 비교 분석
+- **상태**: 완료
+- **SELECT절**: 동일 4개 필드 (LoPrdCd, LoReqtNo, WrsAmnC, WrsRqDtlDsc)
+- **채번**: 둘 다 `SQ_EF_FC_CH_LMT_INQ.NEXTVAL` (상품마다 독립)
+- **차이점**:
+  | | ps315 (N:N, rzt=1) | ps317 (1:N, rzt=3) |
+  |---|---|---|
+  | 데이터 출처 | DB 조회 (`TA.AFLCN_WRS_C`) | Java 파라미터 (`#{prdCode}`) |
+  | FROM | `TB_EF_FC_CM_WRSAMN TA` | `DUAL` |
+  | 거래제한 체크 | NOT EXISTS 있음 | 없음 |
+  | WHERE 필터 | `WRS_RQ_DSC IN ('10','30')` | 없음 |
+- **rztCode의 역할**: 송신 전문 만들 때 상품 데이터를 어디서 가져오냐 결정
+- **실질적 차이는 rzt=2(1:1)뿐**: 고정값 채번으로 일련번호 묶임. 1과 3은 채번 같고 수신도 같음
+- **운영 현황**: rzt=3 제휴사 0건 (검증서버 기준)
+
+### [학습] ps325(CBT 상품) 쿼리 베이스 확인
+- **상태**: 확인 완료
+- **결론**: ps315를 본따서 만든 게 맞다
+- **이유**: DB 상품 조회 필요(ps317 FROM DUAL 불가) + 개별 채번 필요(ps316 고정값 불가) + NOT EXISTS 조건만 CBT용으로 수정
+- **구조**: ps315 = 정식출시 상품 (거래제한 제외), ps325 = CBT 상품 (거래제한 중 CBT 등록된 것 포함)
+
+### 남은 할 일
+- [ ] 스크래핑 권한 부여 후 MCI 4필드 실데이터 재테스트
+- [ ] PT 사업자 가심사요청 테스트 (시스템 점검 해결 후)
+- [ ] TS-CP-0031 나머지 케이스(002~004, 006) 진행
+- [ ] 배포리스트 엑셀 작성
+- [ ] MT 실기기 테스트
+
 <!-- 템플릿
 ### [카테고리] 제목
 - **상태**: 해결 / 미해결 / 보류

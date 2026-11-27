@@ -742,10 +742,15 @@
     - 1 → N:N (ps315 = getApiDataTupwList)
     - 2 → 1:1 (ps316 = getApiDataTupwList2)
     - 3 → 1:N (ps317 = getApiDataTupwList3)
-- **핵심 차이: LoReqtNo(한도조회일련번호) 채번 방식**:
-  - N:N (rzt=1, ps315): 시퀀스 매번 새로 → 상품마다 독립 일련번호
+- **핵심 차이: LoReqtNo(비교신청일련번호 = lnRqSqno) 채번 방식**:
+  - N:N (rzt=1, ps315): 시퀀스 NEXTVAL 매번 → 상품마다 독립 일련번호 + DB 테이블 조회
   - 1:1 (rzt=2, ps316): #{inqNo} 고정값 → 전체가 같은 일련번호 공유
-  - 1:N (rzt=3, ps317): FROM DUAL + Java 파라미터만 사용 (DB 테이블 안 탐)
+  - 1:N (rzt=3, ps317): 시퀀스 NEXTVAL 매번 → 상품마다 독립 일련번호 + **FROM DUAL만** (DB 테이블 안 탐)
+  - **ps315와 ps317 채번 동일** (둘 다 SQ_EF_FC_CH_LMT_INQ.NEXTVAL). 차이는 테이블 조회 유무
+- **전문매핑 = 결과통지방법코드 = RZT_NTC_METHC** (같은 컬럼, 제휴사 테이블 TB_EF_FC_CM_AFLCN)
+  - 11/20 분석 "전문매핑 ≠ 결과통지방법코드" → **수정: 같은 컬럼이다**
+  - 관리자페이지에서 전문매핑 변경 → fcpaa0100dS.saveTupOrgInfo → updateTupOrg → RZT_NTC_METHC UPDATE
+  - TI 대외계 분기에서 rztCode로 쓰는 값도 같은 컬럼 (ps315/316/317 쿼리가 제휴사 테이블 JOIN)
 - **ps310 CASE WHEN RZT_NTC_METHC='3'**: 분류가 아니라 데이터 준비. 1:N일 때만 fisCodeList에 상품코드(AFLCN_WRS_C) 미리 담아둠
 - **검증서버 DB 조회 결과** (ps310 기준 19건):
   - rztCode=1 (N:N): 다수 — fco1003(440 NH생명), fco1002(449 NH손보) 등
